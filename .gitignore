@@ -6,6 +6,9 @@ Thumbs.db
 logs/*
 !logs/README.md
 
+# 環境変数（APIキー等の機密情報）
+.env
+
 # ローカル環境用
 .[pP]rivate/
 .[tT]emp/
