@@ -1,0 +1,11 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# 個人の生活管理ログ（機微な健康情報のため既定で除外）
+logs/*
+!logs/README.md
+
+# 一時ファイル
+.cache/
+*.tmp
