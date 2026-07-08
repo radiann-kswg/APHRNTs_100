@@ -6,6 +6,9 @@ Thumbs.db
 logs/*
 !logs/README.md
 
-# 一時ファイル
-.cache/
-*.tmp
+# ローカル環境用
+.[pP]rivate/
+.[tT]emp/
+
+# Copilot などが一時的に生成するキャッシュ・出力ファイル置き場（リポジトリ管轄外）
+.[cC]ache/
