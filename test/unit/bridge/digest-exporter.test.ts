@@ -60,4 +60,27 @@ describe("buildBotDigest", () => {
     expect(digest).not.toContain("2026-06-01");
     expect(digest).toContain("対象期間内にMisskey Bot側の記録はない");
   });
+
+  it("limits records to the owner when ownerUserId is set", () => {
+    const store = new CheckinStore(db);
+    store.upsert({ userId: "owner", date: "2026-07-08", mood: 7, notes: "オーナーの記録" }, NOW);
+    store.upsert({ userId: "other", date: "2026-07-08", mood: 2, notes: "他ユーザーの記録" }, NOW);
+
+    const digest = buildBotDigest(db, { days: 14, now: NOW, ownerUserId: "owner" });
+
+    expect(digest).toContain("オーナーの記録");
+    expect(digest).not.toContain("他ユーザーの記録");
+    expect(digest).toContain("対象ユーザー: owner");
+  });
+
+  it("includes all users when ownerUserId is empty (single-user mode)", () => {
+    const store = new CheckinStore(db);
+    store.upsert({ userId: "u1", date: "2026-07-08", mood: 7, notes: "A" }, NOW);
+    store.upsert({ userId: "u2", date: "2026-07-08", mood: 2, notes: "B" }, NOW);
+
+    const digest = buildBotDigest(db, { days: 14, now: NOW, ownerUserId: "" });
+
+    expect(digest).toContain("メモ: A");
+    expect(digest).toContain("メモ: B");
+  });
 });

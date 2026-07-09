@@ -33,6 +33,11 @@ const envSchema = z.object({
     .transform((value) => value === "true"),
   CLAUDE_LOGS_DIR: z.string().default("logs"),
   BOT_DIGEST_PATH: z.string().default("logs/bot-digest.md"),
+  // Bot管理者（リポジトリ所有者）のMisskeyユーザーID。
+  // 設定すると連携ブリッジ（ダイジェスト出力・logs/のプロンプト注入）がこのユーザーの会話に限定され、
+  // 複数ユーザー運用時に他ユーザーの記録・管理者の個人ログが混ざらない。
+  // 空の場合は単一ユーザー運用とみなし、全記録を対象にする。
+  BOT_OWNER_USER_ID: z.string().optional().default(""),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -54,6 +54,25 @@ describe("Claude連携ブリッジ（結合）", () => {
     expect(section).not.toContain("古い記録");
   });
 
+  it("notesSectionFor injects owner logs only into the owner's conversation", () => {
+    writeFileSync(join(logsDir, "2026-07-08.md"), "オーナーの個人ログ", "utf8");
+
+    const bridge = createBridgeRuntime({ db, logsDir, digestPath, ownerUserId: "owner-id", now: () => NOW });
+    bridge.syncOnStartup();
+
+    expect(bridge.notesSectionFor("owner-id")).toContain("オーナーの個人ログ");
+    expect(bridge.notesSectionFor("someone-else")).toBeUndefined();
+  });
+
+  it("notesSectionFor injects logs for everyone when ownerUserId is unset", () => {
+    writeFileSync(join(logsDir, "2026-07-08.md"), "共有ログ", "utf8");
+
+    const bridge = createBridgeRuntime({ db, logsDir, digestPath, now: () => NOW });
+    bridge.syncOnStartup();
+
+    expect(bridge.notesSectionFor("anyone")).toContain("共有ログ");
+  });
+
   it("wrapHandler re-imports before handling and exports the digest after handling", async () => {
     const bridge = createBridgeRuntime({ db, logsDir, digestPath, now: () => NOW });
     const checkinStore = new CheckinStore(db);

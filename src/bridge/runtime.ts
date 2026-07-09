@@ -10,6 +10,12 @@ export interface BridgeRuntime {
   /** システムプロンプトへ注入する直近のClaudeセッション記録セクション（記録がなければundefined） */
   currentNotesSection(): string | undefined;
   /**
+   * 指定ユーザーの会話に注入するClaudeセッション記録セクション。
+   * ownerUserId が設定されている場合、オーナー以外の会話には undefined を返す
+   * （管理者の個人ログを他ユーザーへの返信文脈に混ぜない）。
+   */
+  notesSectionFor(userId: string): string | undefined;
+  /**
    * メッセージハンドラーを連携ブリッジ付きでラップする。
    * 処理前に logs/ を再取り込み（Claude側の新しい記録を即反映）、
    * 処理後にダイジェストを書き出す（Bot側の新しい記録を即公開）。
@@ -22,16 +28,26 @@ export interface BridgeRuntime {
 export function createBridgeRuntime(deps: BridgeSyncDeps): BridgeRuntime {
   const notesStore = new ClaudeNotesStore(deps.db);
   const now = deps.now ?? (() => new Date());
+  const ownerUserId = deps.ownerUserId ?? "";
+
+  const currentNotesSection = (): string | undefined => {
+    const since = new Date(now().getTime() - CLAUDE_BRIDGE_NOTES_DAYS * 24 * 60 * 60 * 1000);
+    const rows = notesStore.listSince(since.toISOString().slice(0, 10));
+    return buildClaudeNotesSection(rows);
+  };
 
   return {
     syncOnStartup(): BridgeSyncResult {
       return runSync(deps);
     },
 
-    currentNotesSection(): string | undefined {
-      const since = new Date(now().getTime() - CLAUDE_BRIDGE_NOTES_DAYS * 24 * 60 * 60 * 1000);
-      const rows = notesStore.listSince(since.toISOString().slice(0, 10));
-      return buildClaudeNotesSection(rows);
+    currentNotesSection,
+
+    notesSectionFor(userId: string): string | undefined {
+      if (ownerUserId && userId !== ownerUserId) {
+        return undefined;
+      }
+      return currentNotesSection();
     },
 
     wrapHandler(handler: MessageHandler, onError?: (error: unknown) => void): MessageHandler {

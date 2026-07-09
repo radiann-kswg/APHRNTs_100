@@ -12,6 +12,8 @@ export interface BridgeSyncDeps {
   digestPath: string;
   /** ダイジェストに含める日数（既定: CLAUDE_BRIDGE_DIGEST_DAYS） */
   digestDays?: number;
+  /** Bot管理者のMisskeyユーザーID。指定時はダイジェスト出力をこのユーザーの記録に限定する */
+  ownerUserId?: string;
   now?: () => Date;
 }
 
@@ -31,6 +33,7 @@ export function runExport(deps: BridgeSyncDeps): string {
   const digest = buildBotDigest(deps.db, {
     days: deps.digestDays ?? CLAUDE_BRIDGE_DIGEST_DAYS,
     now: deps.now?.() ?? new Date(),
+    ownerUserId: deps.ownerUserId,
   });
   writeBotDigest(deps.digestPath, digest);
   return deps.digestPath;

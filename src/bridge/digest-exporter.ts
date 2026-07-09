@@ -10,6 +10,11 @@ export interface DigestOptions {
   /** 何日分をダイジェストに含めるか */
   days: number;
   now?: Date;
+  /**
+   * 指定した場合、このユーザーIDの記録のみをダイジェストに含める（複数ユーザー運用時のプライバシー保護）。
+   * 未指定・空文字の場合は全ユーザーの記録を対象にする（単一ユーザー運用）。
+   */
+  ownerUserId?: string;
 }
 
 function fmt(value: number | null, suffix = "/10"): string {
@@ -27,18 +32,22 @@ export function buildBotDigest(db: Database, options: DigestOptions): string {
   const sinceDate = since.toISOString().slice(0, 10);
   const sinceIso = since.toISOString();
 
+  const owner = options.ownerUserId ?? "";
+  const ownerFilter = owner ? " AND user_id = ?" : "";
+  const params = (first: string): string[] => (owner ? [first, owner] : [first]);
+
   const checkins = db
-    .prepare("SELECT * FROM daily_checkins WHERE date >= ? ORDER BY date ASC, user_id ASC")
-    .all(sinceDate) as CheckinRow[];
+    .prepare(`SELECT * FROM daily_checkins WHERE date >= ?${ownerFilter} ORDER BY date ASC, user_id ASC`)
+    .all(...params(sinceDate)) as CheckinRow[];
   const thoughtRecords = db
-    .prepare("SELECT * FROM thought_records WHERE created_at >= ? ORDER BY created_at ASC")
-    .all(sinceIso) as ThoughtRecordRow[];
+    .prepare(`SELECT * FROM thought_records WHERE created_at >= ?${ownerFilter} ORDER BY created_at ASC`)
+    .all(...params(sinceIso)) as ThoughtRecordRow[];
   const activities = db
-    .prepare("SELECT * FROM behavioral_activation_logs WHERE created_at >= ? ORDER BY created_at ASC")
-    .all(sinceIso) as ActivityRow[];
+    .prepare(`SELECT * FROM behavioral_activation_logs WHERE created_at >= ?${ownerFilter} ORDER BY created_at ASC`)
+    .all(...params(sinceIso)) as ActivityRow[];
   const gratitudeEntries = db
-    .prepare("SELECT * FROM gratitude_logs WHERE date >= ? ORDER BY date ASC")
-    .all(sinceDate) as GratitudeRow[];
+    .prepare(`SELECT * FROM gratitude_logs WHERE date >= ?${ownerFilter} ORDER BY date ASC`)
+    .all(...params(sinceDate)) as GratitudeRow[];
 
   const lines: string[] = [
     "# Misskey Bot 記録ダイジェスト（自動生成）",
@@ -48,6 +57,7 @@ export function buildBotDigest(db: Database, options: DigestOptions): string {
     "",
     `- 生成日時: ${now.toISOString()}`,
     `- 対象期間: ${sinceDate} 〜 ${now.toISOString().slice(0, 10)}（直近${options.days}日）`,
+    ...(owner ? [`- 対象ユーザー: ${owner}（BOT_OWNER_USER_ID による限定）`] : []),
     "",
   ];
 

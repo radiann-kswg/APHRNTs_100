@@ -35,9 +35,15 @@ async function main(): Promise<void> {
     env.RATE_LIMIT_GLOBAL_PER_HOUR,
   );
 
-  // Claude連携ブリッジ（dev-cliでも本番同様に有効化する）
+  // dev-cliはローカルの単独利用なので、BOT_OWNER_USER_ID が設定されていても
+  // dev-cli上の会話（DEV_CLI_USER_ID）をオーナー扱いにして連携を確認できるようにする
   const bridge = env.CLAUDE_SYNC_ENABLED
-    ? createBridgeRuntime({ db, logsDir: env.CLAUDE_LOGS_DIR, digestPath: env.BOT_DIGEST_PATH })
+    ? createBridgeRuntime({
+        db,
+        logsDir: env.CLAUDE_LOGS_DIR,
+        digestPath: env.BOT_DIGEST_PATH,
+        ownerUserId: env.BOT_OWNER_USER_ID ? DEV_CLI_USER_ID : "",
+      })
     : null;
   if (bridge) {
     const syncResult = bridge.syncOnStartup();
@@ -48,7 +54,7 @@ async function main(): Promise<void> {
 
   const persona = loadPersonaContent();
   const systemPrompt = bridge
-    ? () => buildSystemPrompt(persona, { claudeNotesSection: bridge.currentNotesSection() })
+    ? (userId: string) => buildSystemPrompt(persona, { claudeNotesSection: bridge.notesSectionFor(userId) })
     : buildSystemPrompt(persona);
   const aiProvider = createAIProvider(env);
 

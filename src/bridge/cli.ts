@@ -4,7 +4,7 @@
 //   npm run sync:export   … Bot→Claude（SQLite記録を logs/bot-digest.md へ書き出し）
 import { loadEnv } from "../config/env.js";
 import { openDatabase } from "../storage/db.js";
-import { runExport, runImport, runSync } from "./sync.js";
+import { runExport, runImport } from "./sync.js";
 
 const mode = process.argv[2] ?? "sync";
 
@@ -20,6 +20,7 @@ function main(): void {
     db,
     logsDir: env.CLAUDE_LOGS_DIR,
     digestPath: env.BOT_DIGEST_PATH,
+    ownerUserId: env.BOT_OWNER_USER_ID,
   };
 
   try {

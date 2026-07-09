@@ -13,8 +13,10 @@ export interface PipelineDeps {
   /**
    * システムプロンプト。関数を渡すとメッセージ処理のたびに評価されるため、
    * Claude連携ブリッジで取り込んだ最新のセッション記録を都度反映できる。
+   * 引数として発言ユーザーのIDを受け取るため、ユーザーごとに内容を変えられる
+   * （例: BOT_OWNER_USER_ID 設定時、オーナー以外にはlogs/の記録を注入しない）。
    */
-  systemPrompt: string | (() => string);
+  systemPrompt: string | ((userId: string) => string);
   sessionStore: SessionStore;
   rateLimiter: RateLimiter;
   safetyIncidentStore: SafetyIncidentStore;
@@ -55,7 +57,7 @@ export function createMessagePipeline(deps: PipelineDeps): MessageHandler {
     const messages: ChatMessage[] = [...history, { role: "user", content: text }];
 
     const executeTool = createToolExecutor(userId, deps.toolHandlerDeps, () => now);
-    const systemPrompt = typeof deps.systemPrompt === "function" ? deps.systemPrompt() : deps.systemPrompt;
+    const systemPrompt = typeof deps.systemPrompt === "function" ? deps.systemPrompt(userId) : deps.systemPrompt;
     const result = await deps.aiProvider.generateReply({
       systemPrompt,
       messages,

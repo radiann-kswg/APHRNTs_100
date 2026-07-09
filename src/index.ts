@@ -44,7 +44,12 @@ async function main(): Promise<void> {
 
   // Claude連携ブリッジ: logs/（Claude Desktop等のセッション記録）⇄ SQLite（Botの記録）
   const bridge = env.CLAUDE_SYNC_ENABLED
-    ? createBridgeRuntime({ db, logsDir: env.CLAUDE_LOGS_DIR, digestPath: env.BOT_DIGEST_PATH })
+    ? createBridgeRuntime({
+        db,
+        logsDir: env.CLAUDE_LOGS_DIR,
+        digestPath: env.BOT_DIGEST_PATH,
+        ownerUserId: env.BOT_OWNER_USER_ID,
+      })
     : null;
   if (bridge) {
     const syncResult = bridge.syncOnStartup();
@@ -55,7 +60,7 @@ async function main(): Promise<void> {
 
   const persona = loadPersonaContent();
   const systemPrompt = bridge
-    ? () => buildSystemPrompt(persona, { claudeNotesSection: bridge.currentNotesSection() })
+    ? (userId: string) => buildSystemPrompt(persona, { claudeNotesSection: bridge.notesSectionFor(userId) })
     : buildSystemPrompt(persona);
   const aiProvider = createAIProvider(env);
 
