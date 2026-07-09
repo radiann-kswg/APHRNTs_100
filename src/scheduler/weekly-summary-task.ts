@@ -2,6 +2,7 @@ import type { BehavioralActivationStore } from "../storage/behavioral-activation
 import type { CheckinStore } from "../storage/checkin-store.js";
 import type { GratitudeStore } from "../storage/gratitude-store.js";
 import type { ThoughtRecordStore } from "../storage/thought-record-store.js";
+import { shouldRunDailyNow } from "./schedule-utils.js";
 
 export interface WeeklySummaryDeps {
   checkinStore: CheckinStore;
@@ -10,18 +11,14 @@ export interface WeeklySummaryDeps {
   thoughtRecordStore: ThoughtRecordStore;
 }
 
-const TWENTY_HOURS_MS = 20 * 60 * 60 * 1000;
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** 指定した曜日・時刻の枠に入っていて、かつ前回実行から20時間以上経っていれば実行対象とする純関数 */
 export function shouldRunNow(lastRunAt: Date | null, now: Date, dayOfWeek: number, hour: number): boolean {
-  if (now.getDay() !== dayOfWeek || now.getHours() !== hour) {
+  if (now.getDay() !== dayOfWeek) {
     return false;
   }
-  if (!lastRunAt) {
-    return true;
-  }
-  return now.getTime() - lastRunAt.getTime() > TWENTY_HOURS_MS;
+  return shouldRunDailyNow(lastRunAt, now, hour);
 }
 
 export function buildWeeklyTrend(userId: string, deps: WeeklySummaryDeps, now: Date = new Date()): string {

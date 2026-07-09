@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { z } from "zod";
+import { CLAUDE_BRIDGE_DIGEST_DAYS } from "./constants.js";
 
 const envSchema = z.object({
   MISSKEY_HOST: z.string().optional().default(""),
@@ -25,6 +26,7 @@ const envSchema = z.object({
 
   WEEKLY_SUMMARY_DAY_OF_WEEK: z.coerce.number().int().min(0).max(6).default(0),
   WEEKLY_SUMMARY_HOUR: z.coerce.number().int().min(0).max(23).default(20),
+  DAILY_REFLECTION_HOUR: z.coerce.number().int().min(0).max(23).default(20),
 
   // Claude連携ブリッジ（logs/ ⇄ SQLite）
   CLAUDE_SYNC_ENABLED: z
@@ -33,6 +35,9 @@ const envSchema = z.object({
     .transform((value) => value === "true"),
   CLAUDE_LOGS_DIR: z.string().default("logs"),
   BOT_DIGEST_PATH: z.string().default("logs/bot-digest.md"),
+  // ダイジェスト（logs/bot-digest.md）に含める日数。月次振り返りなど一時的に長い期間が必要な場合は、
+  // この値を変えずに `npm run sync:export -- --days=31` を使うこともできる。
+  BOT_DIGEST_DAYS: z.coerce.number().int().positive().default(CLAUDE_BRIDGE_DIGEST_DAYS),
   // Bot管理者（リポジトリ所有者）のMisskeyユーザーID。
   // 設定すると連携ブリッジ（ダイジェスト出力・logs/のプロンプト注入）がこのユーザーの会話に限定され、
   // 複数ユーザー運用時に他ユーザーの記録・管理者の個人ログが混ざらない。

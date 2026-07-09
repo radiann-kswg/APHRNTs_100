@@ -42,6 +42,7 @@ async function main(): Promise<void> {
         db,
         logsDir: env.CLAUDE_LOGS_DIR,
         digestPath: env.BOT_DIGEST_PATH,
+        digestDays: env.BOT_DIGEST_DAYS,
         ownerUserId: env.BOT_OWNER_USER_ID ? DEV_CLI_USER_ID : "",
       })
     : null;
