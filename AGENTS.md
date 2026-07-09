@@ -77,6 +77,7 @@
 - 開発用ブランチは `develop`。日常のコミット・機能追加・修正・設定書の更新など、本リポジトリでの通常の作業はすべて `develop`（またはそこから切った作業ブランチ）上で行うこと。
 - `master` はリリース用の保護ブランチとする。開発環境・ローカル環境から `master` へ直接触れないこと（`master` へのチェックアウトでの直接編集、直接 `git commit` / `git push origin master`、`develop` からの直接 `git merge` を含む）。
 - `develop` の変更を `master` へ反映する場合は、必ず Pull Request を作成し、マージすること。ローカルでの直接マージや force push で `master` を更新しない。
+- `master` への変更は、GCE本番VM（`aphrnts-100-bot`）側の自動デプロイタイマーにより、最大5分以内に自動でpull・ビルド・Bot再起動される（詳細は[deploy/README.md](./deploy/README.md)参照）。マージ後は速やかに本番へ反映される前提でレビュー・マージすること。
 - 各エージェント（Claude Code / GitHub Copilot 等）がリポジトリでファイル変更・コミットを行う際は、作業前に現在のブランチを確認し、`master` 上にいる場合はセンパイに確認のうえ `develop` へ切り替えること。
 - PRの作成・マージはセンパイの明示的な承認を得てから実施する（無断でのpush・マージは行わない）。
 

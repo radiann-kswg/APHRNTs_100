@@ -1,0 +1,20 @@
+[Unit]
+Description=APHRNTs_100 Misskey Bot (100 Momo)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aphrnts-bot
+Group=aphrnts-bot
+WorkingDirectory=/opt/aphrnts-100
+EnvironmentFile=/opt/aphrnts-100/.env
+ExecStart=/usr/bin/node dist/index.js
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/aphrnts-100
+
+[Install]
+WantedBy=multi-user.target

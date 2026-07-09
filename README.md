@@ -133,7 +133,7 @@ Botを自分以外のユーザーにも開放する場合は、`.env` の `BOT_O
 
 ## 開発（Misskey Bot / `src/`）
 
-`.cbt-datas/`と同じコンテンツをClaude(Anthropic API)経由で自動応答するMisskey Botのコア実装。現時点ではオフライン確認（`npm run dev:cli`）と手動起動をサポートし、本番運用ツール（PM2/systemd/GCPデプロイ等）は未実装。
+`.cbt-datas/`と同じコンテンツをClaude(Anthropic API)経由で自動応答するMisskey Botのコア実装。現時点ではオフライン確認（`npm run dev:cli`）に加え、GCE VM上でのsystemd常駐運用・`master`マージ後の自動デプロイまで対応済み（詳細は[deploy/README.md](./deploy/README.md)参照）。
 
 ```bash
 npm install
