@@ -15,6 +15,7 @@
 | 「活動を計画したい」「やる気が出ないから何かやってみたい」 | [behavioral-activation.md](./behavioral-activation.md) |
 | 「良かったことを書きたい」「感謝日記をつけたい」 | [gratitude.md](./gratitude.md) |
 | 「今週を振り返りたい」「最近の傾向を知りたい」 | [weekly-reflection.md](./weekly-reflection.md) |
+| 「今月を振り返りたい」「月次で振り返りたい」 | [monthly-reflection.md](./monthly-reflection.md) |
 
 センパイが何をしたいか明言していない場合は、無理に機能を勧めず、まず[AGENTS.mdの運用方針](../AGENTS.md#生活管理cbtサポートの運用方針)通り体調・気分を尋ねる会話から入り、必要そうであれば選択肢として提案してください。
 
@@ -38,6 +39,7 @@
 - [behavioral-activation.md](./behavioral-activation.md) — 活動計画と実施後の振り返り（行動活性化）
 - [gratitude.md](./gratitude.md) — 「良かったこと」3行日記
 - [weekly-reflection.md](./weekly-reflection.md) — 週次振り返り
+- [monthly-reflection.md](./monthly-reflection.md) — 月次振り返り（weekly-reflection.mdの30日版、差分のみ記載）
 
 ## 将来の自動化（Misskey Bot）について
 

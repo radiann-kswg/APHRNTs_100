@@ -7,7 +7,7 @@ import { createBridgeRuntime } from "./bridge/runtime.js";
 import { RateLimiter } from "./bot/ratelimit/index.js";
 import { loadEnv } from "./config/env.js";
 import { MisskeyClient } from "./misskey/client.js";
-import { createWeeklySummaryTask } from "./scheduler/index.js";
+import { createDailyReflectionTask, createWeeklySummaryTask } from "./scheduler/index.js";
 import { TaskScheduler } from "./scheduler/task-scheduler.js";
 import { BehavioralActivationStore } from "./storage/behavioral-activation-store.js";
 import { BotStateStore } from "./storage/bot-state-store.js";
@@ -48,6 +48,7 @@ async function main(): Promise<void> {
         db,
         logsDir: env.CLAUDE_LOGS_DIR,
         digestPath: env.BOT_DIGEST_PATH,
+        digestDays: env.BOT_DIGEST_DAYS,
         ownerUserId: env.BOT_OWNER_USER_ID,
       })
     : null;
@@ -119,6 +120,12 @@ async function main(): Promise<void> {
       misskeyClient,
       dayOfWeek: env.WEEKLY_SUMMARY_DAY_OF_WEEK,
       hour: env.WEEKLY_SUMMARY_HOUR,
+    }),
+    createDailyReflectionTask({
+      botStateStore,
+      sessionStore,
+      misskeyClient,
+      hour: env.DAILY_REFLECTION_HOUR,
     }),
   ]);
   scheduler.start();

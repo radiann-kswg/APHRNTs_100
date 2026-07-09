@@ -9,15 +9,21 @@ describe("loadEnv", () => {
     expect(env.RATE_LIMIT_GLOBAL_PER_HOUR).toBe(30);
     expect(env.WEEKLY_SUMMARY_DAY_OF_WEEK).toBe(0);
     expect(env.WEEKLY_SUMMARY_HOUR).toBe(20);
+    expect(env.DAILY_REFLECTION_HOUR).toBe(20);
+    expect(env.BOT_DIGEST_DAYS).toBe(14);
   });
 
   it("coerces numeric env vars from strings", () => {
     const env = loadEnv({
       RATE_LIMIT_REPLY_COOLDOWN_MS: "5000",
       WEEKLY_SUMMARY_HOUR: "9",
+      DAILY_REFLECTION_HOUR: "21",
+      BOT_DIGEST_DAYS: "31",
     });
     expect(env.RATE_LIMIT_REPLY_COOLDOWN_MS).toBe(5000);
     expect(env.WEEKLY_SUMMARY_HOUR).toBe(9);
+    expect(env.DAILY_REFLECTION_HOUR).toBe(21);
+    expect(env.BOT_DIGEST_DAYS).toBe(31);
   });
 
   it("rejects an invalid AI_PROVIDER", () => {

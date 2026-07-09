@@ -23,6 +23,7 @@
 - 「今日のチェックインを記録して」「この思考記録を保存して」のように**明示的に頼んだ場合のみ**、日次チェックイン・思考記録・行動活性化・感謝日記が構造化データとして保存されます（勝手に保存はしません）。
 - 記録はMisskeyのユーザーIDごとに分離して保存され、他のユーザーの会話に混ざることはありません。
 - 連投を防ぐため、返信にはクールダウン（既定30分。会話が続いている間は緩和）があります。
+- 毎日20時（既定、`DAILY_REFLECTION_HOUR`で変更可）に、その日の振り返りを促すリマインドが届きます。
 - Misskeyは半公開の場です。**見られたくない内容は公開の場に書かない**よう気をつけてください。
 
 ### 2. Claude Desktop / Claude Code で使う
@@ -30,7 +31,7 @@
 リポジトリをクローンし、Claude Desktopの「プロジェクト」機能に `AGENTS.md`・`.roleplay-datas/roleplay-prompt.md`・`.cbt-datas/` を知識として追加すると、チャットだけで「100(モモ)」との生活管理・CBTセルフケアができます（コード実行は不要）。
 
 - 会話の継続性のため、セッション記録を [logs/](./logs/) に `YYYY-MM-DD.md` 形式で残せます（既定でgit管理外）。
-- 構造的なCBTセルフケア（思考記録・チェックイン・行動活性化・感謝日記・週次振り返り）は [.cbt-datas/](./.cbt-datas/) のガイドに従ってください。
+- 構造的なCBTセルフケア（思考記録・チェックイン・行動活性化・感謝日記・週次振り返り・月次振り返り）は [.cbt-datas/](./.cbt-datas/) のガイドに従ってください。Claude Desktop / Claude.aiでは、週次・月次振り返りの際に気分推移などをArtifact（自己完結型HTML）としてグラフ化することもできます。
 
 ### 3. 自分でBotをホストする（セルフホスト）
 
@@ -73,7 +74,7 @@ Claude (Desktop/Code)                     Misskey Bot (src/)
    │   テーブルへ取り込み、Botのシステムプロンプトに        │
    │   直近7日分を自動注入（返信の文脈維持に利用）           │
    │ Bot→Claude: SQLiteの記録（チェックイン・思考記録・      │
-   │   行動活性化・感謝日記）の直近14日分を                  │
+   │   行動活性化・感謝日記）の直近14日分（既定、変更可）を   │
    │   logs/bot-digest.md へMarkdownダイジェスト出力         │
    └─────────────────────────────────────────────────────┘
 ```
@@ -96,9 +97,10 @@ npm run sync:export    # Bot→Claude のみ（SQLite記録を logs/bot-digest.m
 | Claude→Bot対象 | `logs/` 直下の `YYYY-MM-DD.md`（`README.md`・`bot-digest.md` 等は対象外、空ファイルはスキップ） |
 | 取り込み先 | SQLite `claude_session_notes` テーブル（日付をキーに上書き） |
 | プロンプト注入 | 直近**7日**分・1日あたり最大**2,000字**（超過分は省略）。記録が無い日はセクション自体を注入しない |
-| Bot→Claude出力 | `logs/bot-digest.md`（**自動生成・手動編集禁止**。同期のたびに直近**14日**分で上書き） |
+| Bot→Claude出力 | `logs/bot-digest.md`（**自動生成・手動編集禁止**。同期のたびに直近**14日（既定、`BOT_DIGEST_DAYS`で変更可）**分で上書き） |
 | 同期タイミング | Bot/dev-cli起動時、各メッセージ処理の前（import）と後（export）、および手動の `npm run sync` |
-| 設定 | `.env` の `CLAUDE_SYNC_ENABLED`（既定 `true`）／ `CLAUDE_LOGS_DIR`（既定 `logs`）／ `BOT_DIGEST_PATH`（既定 `logs/bot-digest.md`）／ `BOT_OWNER_USER_ID` |
+| 設定 | `.env` の `CLAUDE_SYNC_ENABLED`（既定 `true`）／ `CLAUDE_LOGS_DIR`（既定 `logs`）／ `BOT_DIGEST_PATH`（既定 `logs/bot-digest.md`）／ `BOT_DIGEST_DAYS`（既定 `14`）／ `BOT_OWNER_USER_ID` |
+| ダイジェストの一時延長 | `npm run sync:export -- --days=31` のように実行すると、`BOT_DIGEST_DAYS`を変えずにその場限りで対象日数を上書きできる（月次振り返りの準備等） |
 | 実装 | [`src/bridge/`](./src/bridge/)（`log-importer` / `digest-exporter` / `notes-section` / `sync` / `runtime` / `cli`） |
 
 ### 複数ユーザー運用時のプライバシー（`BOT_OWNER_USER_ID`）
