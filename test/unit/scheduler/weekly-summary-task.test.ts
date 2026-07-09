@@ -1,0 +1,66 @@
+import { describe, expect, it } from "vitest";
+import { BehavioralActivationStore } from "../../../src/storage/behavioral-activation-store.js";
+import { CheckinStore } from "../../../src/storage/checkin-store.js";
+import { openDatabase } from "../../../src/storage/db.js";
+import { GratitudeStore } from "../../../src/storage/gratitude-store.js";
+import { ThoughtRecordStore } from "../../../src/storage/thought-record-store.js";
+import { buildWeeklyTrend, shouldRunNow } from "../../../src/scheduler/weekly-summary-task.js";
+
+describe("shouldRunNow", () => {
+  it("returns false when the day of week does not match", () => {
+    const now = new Date("2026-01-05T20:00:00");
+    const wrongDay = (now.getDay() + 1) % 7;
+    expect(shouldRunNow(null, now, wrongDay, now.getHours())).toBe(false);
+  });
+
+  it("returns false when the hour does not match", () => {
+    const now = new Date("2026-01-05T20:00:00");
+    expect(shouldRunNow(null, now, now.getDay(), now.getHours() + 1)).toBe(false);
+  });
+
+  it("returns true on the first run within the matching slot", () => {
+    const now = new Date("2026-01-05T20:00:00");
+    expect(shouldRunNow(null, now, now.getDay(), now.getHours())).toBe(true);
+  });
+
+  it("returns false if already run within the last 20 hours", () => {
+    const now = new Date("2026-01-05T20:00:00");
+    const lastRunAt = new Date(now.getTime() - 60 * 60 * 1000);
+    expect(shouldRunNow(lastRunAt, now, now.getDay(), now.getHours())).toBe(false);
+  });
+
+  it("returns true if the last run was more than 20 hours ago", () => {
+    const now = new Date("2026-01-05T20:00:00");
+    const lastRunAt = new Date(now.getTime() - 21 * 60 * 60 * 1000);
+    expect(shouldRunNow(lastRunAt, now, now.getDay(), now.getHours())).toBe(true);
+  });
+});
+
+describe("buildWeeklyTrend", () => {
+  it("returns a no-record message when nothing was logged", () => {
+    const db = openDatabase(":memory:");
+    const deps = {
+      checkinStore: new CheckinStore(db),
+      activationStore: new BehavioralActivationStore(db),
+      gratitudeStore: new GratitudeStore(db),
+      thoughtRecordStore: new ThoughtRecordStore(db),
+    };
+    const trend = buildWeeklyTrend("user1", deps, new Date("2026-01-08T00:00:00Z"));
+    expect(trend).toContain("記録がない");
+  });
+
+  it("summarizes the mood average when checkins exist", () => {
+    const db = openDatabase(":memory:");
+    const checkinStore = new CheckinStore(db);
+    checkinStore.upsert({ userId: "user1", date: "2026-01-05", mood: 6 });
+    checkinStore.upsert({ userId: "user1", date: "2026-01-06", mood: 8 });
+    const deps = {
+      checkinStore,
+      activationStore: new BehavioralActivationStore(db),
+      gratitudeStore: new GratitudeStore(db),
+      thoughtRecordStore: new ThoughtRecordStore(db),
+    };
+    const trend = buildWeeklyTrend("user1", deps, new Date("2026-01-08T00:00:00Z"));
+    expect(trend).toContain("7.0");
+  });
+});

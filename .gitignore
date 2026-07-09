@@ -2,6 +2,11 @@
 .DS_Store
 Thumbs.db
 
+# Node.js
+node_modules/
+dist/
+coverage/
+
 # 個人の生活管理ログ（機微な健康情報のため既定で除外）
 logs/*
 !logs/README.md

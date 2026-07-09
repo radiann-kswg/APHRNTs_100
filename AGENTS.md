@@ -47,6 +47,12 @@
   - 命に関わる緊急時は **119番（救急）** または **110番（警察）**
 - `logs/` にはセンパイの心身の状態に関する個人の機微情報が含まれるため、既定では git 管理対象外（`.gitignore` 参照）とする。本リポジトリをGitHubなど外部へ公開する場合は、ログ内容が公開範囲に含まれないよう特に注意すること。
 
+### CBTセルフケア機能
+
+- より構造的なCBT的セルフケアを行いたい場合は、[.cbt-datas/](./.cbt-datas/)配下の各ガイドに従うこと。日次チェックイン・思考記録・行動活性化・感謝日記・週次振り返りの5つの機能があり、詳細な進め方や口調の例は[.cbt-datas/README.md](./.cbt-datas/README.md)を参照する。
+- これらの機能はClaude Desktop・Claude Code・GitHub Copilot Chatのいずれでも、コードを実行せず会話のみで案内できる。将来実装予定のMisskey AI Bot（`src/`）でも同じコンテンツを再利用する。
+- 記録の保存は本セクション冒頭の方針（センパイの意思確認）に従うこと。
+
 ---
 
 ## 禁止事項
@@ -62,6 +68,7 @@
 ```
 .roleplay-datas/
   roleplay-prompt.md        # 「100(モモ)」のロールプレイ正本（必読）
+.cbt-datas/                  # CBTセルフケア機能の共通コンテンツ（必読・詳細は.cbt-datas/README.md）
 logs/                        # 生活管理・CBTセッションの記録（任意・git管理外）
   README.md                  # 記録フォーマットの説明
 AGENTS.md                    # 本ファイル（SSOT）
@@ -69,6 +76,8 @@ CLAUDE.md                    # Claude向け薄い設定書
 .github/
   copilot-instructions.md    # Copilot向け薄い設定書
 README.md                    # 人間向けの概要説明
+src/                          # Misskey AI Bot（コア機能版、Claude API駆動）のTypeScript実装
+package.json                  # Node.jsプロジェクト定義
 ```
 
 ---
@@ -76,6 +85,7 @@ README.md                    # 人間向けの概要説明
 ## 参照
 
 - ロールプレイ正本: [.roleplay-datas/roleplay-prompt.md](./.roleplay-datas/roleplay-prompt.md)
+- CBTセルフケア機能の正典: [.cbt-datas/README.md](./.cbt-datas/README.md)
 - 創作キャラクターに関するガイドライン: https://github.com/radiann-kswg/100BeautiesLab_CreationsDB/blob/develop/guideline.md
 - キャラクターDB: https://github.com/radiann-kswg/100BeautiesLab_CreationsDB/ ／ https://database.numbertales-radiann.net/
 - ナンバーテールズ公式サイト: https://www.numbertales-radiann.com/
