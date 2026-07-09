@@ -25,6 +25,14 @@ const envSchema = z.object({
 
   WEEKLY_SUMMARY_DAY_OF_WEEK: z.coerce.number().int().min(0).max(6).default(0),
   WEEKLY_SUMMARY_HOUR: z.coerce.number().int().min(0).max(23).default(20),
+
+  // Claude連携ブリッジ（logs/ ⇄ SQLite）
+  CLAUDE_SYNC_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
+  CLAUDE_LOGS_DIR: z.string().default("logs"),
+  BOT_DIGEST_PATH: z.string().default("logs/bot-digest.md"),
 });
 
 export type Env = z.infer<typeof envSchema>;

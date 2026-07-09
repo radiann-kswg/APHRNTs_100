@@ -3,6 +3,7 @@ import { createMentionHandler } from "./bot/handlers/mention.js";
 import { loadPersonaContent } from "./bot/character/loader.js";
 import { buildSystemPrompt } from "./bot/character/prompt-builder.js";
 import { createMessagePipeline } from "./bot/pipeline.js";
+import { createBridgeRuntime } from "./bridge/runtime.js";
 import { RateLimiter } from "./bot/ratelimit/index.js";
 import { loadEnv } from "./config/env.js";
 import { MisskeyClient } from "./misskey/client.js";
@@ -41,11 +42,24 @@ async function main(): Promise<void> {
     env.RATE_LIMIT_GLOBAL_PER_HOUR,
   );
 
+  // Claude連携ブリッジ: logs/（Claude Desktop等のセッション記録）⇄ SQLite（Botの記録）
+  const bridge = env.CLAUDE_SYNC_ENABLED
+    ? createBridgeRuntime({ db, logsDir: env.CLAUDE_LOGS_DIR, digestPath: env.BOT_DIGEST_PATH })
+    : null;
+  if (bridge) {
+    const syncResult = bridge.syncOnStartup();
+    logger.info(
+      `Claude連携ブリッジ: ${env.CLAUDE_LOGS_DIR}/ から${syncResult.import.imported}件のセッション記録を取り込み、ダイジェストを ${syncResult.digestPath} へ書き出した。`,
+    );
+  }
+
   const persona = loadPersonaContent();
-  const systemPrompt = buildSystemPrompt(persona);
+  const systemPrompt = bridge
+    ? () => buildSystemPrompt(persona, { claudeNotesSection: bridge.currentNotesSection() })
+    : buildSystemPrompt(persona);
   const aiProvider = createAIProvider(env);
 
-  const handleMessage = createMessagePipeline({
+  let handleMessage = createMessagePipeline({
     aiProvider,
     systemPrompt,
     sessionStore,
@@ -54,6 +68,11 @@ async function main(): Promise<void> {
     toolHandlerDeps: { checkinStore, thoughtRecordStore, gratitudeStore, activationStore },
     now: () => new Date(),
   });
+  if (bridge) {
+    handleMessage = bridge.wrapHandler(handleMessage, (error) => {
+      logger.warn("Claude連携ブリッジの同期に失敗した（応答処理は継続する）", error);
+    });
+  }
 
   if (!env.MISSKEY_HOST || !env.MISSKEY_TOKEN) {
     logger.warn(

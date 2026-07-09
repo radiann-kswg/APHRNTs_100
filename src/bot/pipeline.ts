@@ -10,7 +10,11 @@ export type Channel = "misskey" | "cli";
 
 export interface PipelineDeps {
   aiProvider: AIProvider;
-  systemPrompt: string;
+  /**
+   * システムプロンプト。関数を渡すとメッセージ処理のたびに評価されるため、
+   * Claude連携ブリッジで取り込んだ最新のセッション記録を都度反映できる。
+   */
+  systemPrompt: string | (() => string);
   sessionStore: SessionStore;
   rateLimiter: RateLimiter;
   safetyIncidentStore: SafetyIncidentStore;
@@ -51,8 +55,9 @@ export function createMessagePipeline(deps: PipelineDeps): MessageHandler {
     const messages: ChatMessage[] = [...history, { role: "user", content: text }];
 
     const executeTool = createToolExecutor(userId, deps.toolHandlerDeps, () => now);
+    const systemPrompt = typeof deps.systemPrompt === "function" ? deps.systemPrompt() : deps.systemPrompt;
     const result = await deps.aiProvider.generateReply({
-      systemPrompt: deps.systemPrompt,
+      systemPrompt,
       messages,
       tools: ALL_TOOLS,
       executeTool,

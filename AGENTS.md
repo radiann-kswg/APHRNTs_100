@@ -50,8 +50,16 @@
 ### CBTセルフケア機能
 
 - より構造的なCBT的セルフケアを行いたい場合は、[.cbt-datas/](./.cbt-datas/)配下の各ガイドに従うこと。日次チェックイン・思考記録・行動活性化・感謝日記・週次振り返りの5つの機能があり、詳細な進め方や口調の例は[.cbt-datas/README.md](./.cbt-datas/README.md)を参照する。
-- これらの機能はClaude Desktop・Claude Code・GitHub Copilot Chatのいずれでも、コードを実行せず会話のみで案内できる。将来実装予定のMisskey AI Bot（`src/`）でも同じコンテンツを再利用する。
+- これらの機能はClaude Desktop・Claude Code・GitHub Copilot Chatのいずれでも、コードを実行せず会話のみで案内できる。Misskey AI Bot（`src/`）でも同じコンテンツを再利用する。
 - 記録の保存は本セクション冒頭の方針（センパイの意思確認）に従うこと。
+
+### Claude連携ブリッジ（Misskey Bot ⇄ Claude）
+
+- Misskey Bot（`src/`）とClaude（Desktop / Code）は `logs/` を共有ハブとして双方向にヘルスケア記録を連携する（詳細仕様は [README.md](./README.md#claude連携ブリッジmisskey-bot--claude-のヘルスケア連携) を参照）。
+  - **Bot→Claude**: Botが `logs/bot-digest.md` に直近14日分の記録ダイジェストを自動生成する。各エージェントはセッション開始時、`logs/` の日次記録に加えて `logs/bot-digest.md`（存在する場合）にも目を通し、Misskey側での記録を会話の一貫性に反映すること。
+  - **Claude→Bot**: 各エージェントが `logs/YYYY-MM-DD.md` に残したセッション記録は、Botが自動で取り込み応答文脈に利用する。ログを書く際は [logs/README.md](./logs/README.md) のフォーマットに従うこと。
+- `logs/bot-digest.md` は**自動生成ファイル**であり、エージェントもセンパイも手動で編集しないこと（次回同期で上書きされる）。
+- 連携で共有される内容はセンパイの機微情報である。Bot側ではセンパイ本人以外との会話・公開投稿で記録内容に言及しないこと（システムプロンプトで強制されるが、方針としてもここに明記する）。
 
 ---
 
@@ -71,6 +79,7 @@
 .cbt-datas/                  # CBTセルフケア機能の共通コンテンツ（必読・詳細は.cbt-datas/README.md）
 logs/                        # 生活管理・CBTセッションの記録（任意・git管理外）
   README.md                  # 記録フォーマットの説明
+  bot-digest.md              # Misskey Bot記録の自動生成ダイジェスト（連携ブリッジ・手動編集禁止）
 AGENTS.md                    # 本ファイル（SSOT）
 CLAUDE.md                    # Claude向け薄い設定書
 .github/

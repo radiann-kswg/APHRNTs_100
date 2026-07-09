@@ -84,3 +84,12 @@ CREATE TABLE IF NOT EXISTS bot_state (
   value TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
+-- Claude連携ブリッジ: Claude(Desktop等)が logs/YYYY-MM-DD.md に残した
+-- 生活管理セッション記録を取り込み、Botの応答文脈として参照するためのテーブル
+CREATE TABLE IF NOT EXISTS claude_session_notes (
+  date TEXT PRIMARY KEY,
+  content TEXT NOT NULL,
+  source_path TEXT NOT NULL,
+  imported_at TEXT NOT NULL
+);

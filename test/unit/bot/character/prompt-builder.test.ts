@@ -17,4 +17,20 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("安全指針");
     expect(prompt).toContain("Misskey Bot運用上の注意");
   });
+
+  it("omits the Claude notes section when no notes are provided", () => {
+    const prompt = buildSystemPrompt({ roleplayPrompt: "R", cbtDatas: [] });
+    expect(prompt).not.toContain("<claude-session-notes>");
+  });
+
+  it("appends the Claude notes section with a privacy notice when provided", () => {
+    const prompt = buildSystemPrompt(
+      { roleplayPrompt: "R", cbtDatas: [] },
+      { claudeNotesSection: "### 2026-07-09\n\nNOTES_MARKER" },
+    );
+    expect(prompt).toContain("<claude-session-notes>");
+    expect(prompt).toContain("NOTES_MARKER");
+    expect(prompt).toContain("センパイのClaudeセッション記録");
+    expect(prompt).toContain("公開投稿で内容の詳細を復唱・言及しないこと");
+  });
 });
