@@ -4,6 +4,7 @@ import { loadPersonaContent } from "../bot/character/loader.js";
 import { buildSystemPrompt } from "../bot/character/prompt-builder.js";
 import { createMessagePipeline } from "../bot/pipeline.js";
 import { RateLimiter } from "../bot/ratelimit/index.js";
+import { createBridgeRuntime } from "../bridge/runtime.js";
 import { loadEnv } from "../config/env.js";
 import { openDatabase } from "../storage/db.js";
 import { BehavioralActivationStore } from "../storage/behavioral-activation-store.js";
@@ -34,11 +35,30 @@ async function main(): Promise<void> {
     env.RATE_LIMIT_GLOBAL_PER_HOUR,
   );
 
+  // dev-cliはローカルの単独利用なので、BOT_OWNER_USER_ID が設定されていても
+  // dev-cli上の会話（DEV_CLI_USER_ID）をオーナー扱いにして連携を確認できるようにする
+  const bridge = env.CLAUDE_SYNC_ENABLED
+    ? createBridgeRuntime({
+        db,
+        logsDir: env.CLAUDE_LOGS_DIR,
+        digestPath: env.BOT_DIGEST_PATH,
+        ownerUserId: env.BOT_OWNER_USER_ID ? DEV_CLI_USER_ID : "",
+      })
+    : null;
+  if (bridge) {
+    const syncResult = bridge.syncOnStartup();
+    console.log(
+      `(Claude連携ブリッジ: ${env.CLAUDE_LOGS_DIR}/ から${syncResult.import.imported}件取り込み、ダイジェストを ${syncResult.digestPath} へ書き出した)`,
+    );
+  }
+
   const persona = loadPersonaContent();
-  const systemPrompt = buildSystemPrompt(persona);
+  const systemPrompt = bridge
+    ? (userId: string) => buildSystemPrompt(persona, { claudeNotesSection: bridge.notesSectionFor(userId) })
+    : buildSystemPrompt(persona);
   const aiProvider = createAIProvider(env);
 
-  const handleMessage = createMessagePipeline({
+  let handleMessage = createMessagePipeline({
     aiProvider,
     systemPrompt,
     sessionStore,
@@ -47,9 +67,14 @@ async function main(): Promise<void> {
     toolHandlerDeps: { checkinStore, thoughtRecordStore, gratitudeStore, activationStore },
     now: () => new Date(),
   });
+  if (bridge) {
+    handleMessage = bridge.wrapHandler(handleMessage, (error) => {
+      console.warn("(Claude連携ブリッジの同期に失敗した)", error);
+    });
+  }
 
   console.log(
-    `100(モモ)のdev-cliを起動した（AIプロバイダー: ${aiProvider.name}）。/exit で終了、/reset で会話をリセット、/summary で週次振り返りを表示する。`,
+    `100(モモ)のdev-cliを起動した（AIプロバイダー: ${aiProvider.name}）。/exit で終了、/reset で会話をリセット、/summary で週次振り返り、/sync でClaude連携ブリッジの同期を実行する。`,
   );
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -73,6 +98,17 @@ async function main(): Promise<void> {
       if (trimmed === "/reset") {
         sessionStore.clear(DEV_CLI_USER_ID);
         console.log("(会話をリセットした)");
+        continue;
+      }
+      if (trimmed === "/sync") {
+        if (!bridge) {
+          console.log("(CLAUDE_SYNC_ENABLED=false のため連携ブリッジは無効になっている)");
+        } else {
+          const syncResult = bridge.syncOnStartup();
+          console.log(
+            `(logs/から${syncResult.import.imported}件取り込み、ダイジェストを ${syncResult.digestPath} へ書き出した)`,
+          );
+        }
         continue;
       }
       if (trimmed === "/summary") {

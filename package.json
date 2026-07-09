@@ -10,6 +10,9 @@
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "dev:cli": "tsx src/dev-cli/index.ts",
+    "sync": "tsx src/bridge/cli.ts sync",
+    "sync:import": "tsx src/bridge/cli.ts import",
+    "sync:export": "tsx src/bridge/cli.ts export",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"

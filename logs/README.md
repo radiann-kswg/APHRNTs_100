@@ -6,6 +6,12 @@
 
 `YYYY-MM-DD.md`（例: `2026-07-09.md`）
 
+このファイル名形式（`YYYY-MM-DD.md`）の記録は、Claude連携ブリッジによってMisskey Bot（`../src/`）へ自動で取り込まれ、Botの応答文脈に利用されます（詳細は[../README.md](../README.md)参照）。
+
+## bot-digest.md（自動生成・編集禁止）
+
+`bot-digest.md` は、Misskey Bot側で保存された記録（日次チェックイン・思考記録・行動活性化・感謝日記）の直近14日分ダイジェストです。連携ブリッジ（Bot起動時・返信時・`npm run sync`）が自動生成・上書きするため、**手動で編集しないでください**。Claude（Desktop / Code）はセッション開始時にこのファイルを読み、Misskey側の記録を会話に反映します。
+
 ## 推奨フォーマット
 
 ```markdown

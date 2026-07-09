@@ -10,3 +10,11 @@ export const SESSION_MAX_MESSAGES = 24;
 export const ACTIVE_CONVERSATION_WINDOW_MS = 5 * 60 * 1000;
 
 export const CHARACTER_NAME = "100(モモ)";
+
+// Claude連携ブリッジ（logs/ ⇄ SQLite）の既定値
+// Bot→Claude: ダイジェスト（logs/bot-digest.md）に含める日数
+export const CLAUDE_BRIDGE_DIGEST_DAYS = 14;
+// Claude→Bot: システムプロンプトへ注入するセッション記録の日数
+export const CLAUDE_BRIDGE_NOTES_DAYS = 7;
+// 1日分の記録をプロンプトへ注入する際の最大文字数（超過分は省略）
+export const CLAUDE_BRIDGE_NOTE_MAX_CHARS = 2000;
