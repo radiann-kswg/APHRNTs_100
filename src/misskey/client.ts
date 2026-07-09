@@ -11,9 +11,8 @@ export interface MisskeyClientOptions {
   token: string;
 }
 
-// MISSKEY_TOKENが未設定のため今回のスコープではライブ接続テストは行わない。
-// misskey-jsの公開API（Stream + APIClient）に基づいて実装しているが、
-// 実接続時にはmisskey-jsの型定義と実際のイベント名を再確認すること。
+// 実際のMisskeyインスタンスへのライブ接続・メンション応答（main チャンネルの
+// mention イベント）を実機確認済み（2026-07-09、GCE本番デプロイでのテスト）。
 export class MisskeyClient {
   private stream: InstanceType<typeof Misskey.Stream> | null = null;
   private readonly api: InstanceType<typeof Misskey.api.APIClient>;
