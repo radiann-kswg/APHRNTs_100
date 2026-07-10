@@ -23,6 +23,7 @@
 - 「プロジェクト」機能を使う場合、本リポジトリの `AGENTS.md` と `.roleplay-datas/roleplay-prompt.md`、および `.cbt-datas/` 配下の各ガイドをプロジェクトの知識（Project knowledge）に追加し、カスタム指示にも本ファイルの要点を反映すること。
 - Claude Desktopはセッションをまたいだ記憶を持たないため、[logs/](./logs/) の記録を必ず参照して継続的な会話を実現すること。
 - セッション終盤に `logs/YYYY-MM-DD.md` へ記録を残すと、Claude連携ブリッジ経由でMisskey Botにも文脈が引き継がれる（記録の可否は毎回センパイに確認する）。`logs/bot-digest.md` は自動生成のため編集しない。
+- ライブアーティファクト「Health Sheet」の「logsに書き込む」ボタンは、Desktop Commander MCP経由で `logs/YYYY-MM-DD.md`（週間シートは `logs/weekly-YYYY-MM-DD.md`・月曜日付）を直接編集する。書き込みは `<!-- health-sheet:start -->`〜`<!-- health-sheet:end -->` マーカー区間だけを置換し、マーカー外の手書き内容は保持する（詳細は[logs/README.md](./logs/README.md#health-sheetアーティファクトによる直接書き込み)）。利用にはDesktop Commander MCP（プラグイン）が接続されていることが前提で、未接続時はクリップボードへのコピーにフォールバックする。
 
 ### Claude Code
 
