@@ -98,6 +98,7 @@ async function main(): Promise<void> {
   const onChatMessage = createChatHandler(handleMessage, misskeyClient);
   let wsConnected = false;
   let lastConnectedAt: string | null = null;
+  let lastDisconnectedAt: string | null = null;
 
   misskeyClient.connect(
     (note) => {
@@ -110,14 +111,21 @@ async function main(): Promise<void> {
         logger.error("一対一チャット処理でエラーが発生した", error);
       });
     },
+    (connected) => {
+      wsConnected = connected;
+      if (connected) {
+        lastConnectedAt = new Date().toISOString();
+      } else {
+        lastDisconnectedAt = new Date().toISOString();
+      }
+    },
   );
-  wsConnected = true;
-  lastConnectedAt = new Date().toISOString();
   logger.info("Misskeyへの接続を開始した。");
 
   const heartbeat = createHeartbeatWriter(env.HEARTBEAT_PATH, env.HEARTBEAT_INTERVAL_MS, () => ({
     wsConnected,
     lastConnectedAt,
+    lastDisconnectedAt,
     startedAt,
   }));
   heartbeat.start();

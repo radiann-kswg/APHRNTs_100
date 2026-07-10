@@ -35,14 +35,20 @@ export class MisskeyClient {
     });
   }
 
-  connect(onMention: (note: MentionNote) => void, onChatMessage?: (message: IncomingChatMessage) => void): void {
+  connect(
+    onMention: (note: MentionNote) => void,
+    onChatMessage?: (message: IncomingChatMessage) => void,
+    onConnectionChange?: (connected: boolean) => void,
+  ): void {
     this.stream = new Misskey.Stream(this.options.host, { token: this.options.token });
 
     this.stream.on("_connected_", () => {
       console.log("[misskey] ストリームに接続した");
+      onConnectionChange?.(true);
     });
     this.stream.on("_disconnected_", () => {
       console.warn("[misskey] ストリームが切断された。自動再接続を待つ");
+      onConnectionChange?.(false);
     });
 
     const mainChannel = this.stream.useChannel("main");

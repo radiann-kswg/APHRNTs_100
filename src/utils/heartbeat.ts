@@ -4,6 +4,7 @@ import { dirname } from "node:path";
 export interface HeartbeatState {
   wsConnected: boolean;
   lastConnectedAt: string | null;
+  lastDisconnectedAt: string | null;
   startedAt: string;
 }
 
@@ -12,7 +13,6 @@ export interface HeartbeatWriter {
   stop(): void;
 }
 
-// 小さなユーティリティ。今回のスコープではウォッチドッグ等の消費者は配線しない。
 export function createHeartbeatWriter(
   path: string,
   intervalMs: number,
@@ -27,6 +27,7 @@ export function createHeartbeatWriter(
       ts: new Date().toISOString(),
       wsConnected: state.wsConnected,
       lastConnectedAt: state.lastConnectedAt,
+      lastDisconnectedAt: state.lastDisconnectedAt,
       uptimeSec: Math.floor((Date.now() - new Date(state.startedAt).getTime()) / 1000),
     };
     writeFileSync(path, JSON.stringify(payload, null, 2));

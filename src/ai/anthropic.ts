@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { DEFAULT_ANTHROPIC_MODEL } from "../config/constants.js";
+import { AI_REQUEST_TIMEOUT_MS, DEFAULT_ANTHROPIC_MODEL } from "../config/constants.js";
 import type { AIProvider, GenerateReplyParams, GenerateReplyResult, ToolInvocation } from "./provider.js";
 
 const MAX_TOOL_TURNS = 5;
@@ -27,13 +27,16 @@ export function createAnthropicProvider(apiKey: string, model?: string): AIProvi
       let finalText = "";
 
       for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
-        const response = await client.messages.create({
-          model: resolvedModel,
-          max_tokens: MAX_TOKENS,
-          system: systemPrompt,
-          messages: conversation,
-          tools: anthropicTools.length > 0 ? anthropicTools : undefined,
-        });
+        const response = await client.messages.create(
+          {
+            model: resolvedModel,
+            max_tokens: MAX_TOKENS,
+            system: systemPrompt,
+            messages: conversation,
+            tools: anthropicTools.length > 0 ? anthropicTools : undefined,
+          },
+          { timeout: AI_REQUEST_TIMEOUT_MS },
+        );
 
         const textBlocks = response.content.filter(
           (block): block is Anthropic.TextBlock => block.type === "text",

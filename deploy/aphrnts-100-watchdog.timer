@@ -1,0 +1,10 @@
+[Unit]
+Description=Run APHRNTs_100 watchdog check every 3 minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=3min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

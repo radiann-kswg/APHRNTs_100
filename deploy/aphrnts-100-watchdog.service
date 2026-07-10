@@ -1,0 +1,6 @@
+[Unit]
+Description=APHRNTs_100 watchdog check (restart the bot if it looks unresponsive)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/aphrnts-100/deploy/aphrnts-100-watchdog.sh
