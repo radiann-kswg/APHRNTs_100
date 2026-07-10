@@ -40,6 +40,7 @@
 - [gratitude.md](./gratitude.md) — 「良かったこと」3行日記
 - [weekly-reflection.md](./weekly-reflection.md) — 週次振り返り
 - [monthly-reflection.md](./monthly-reflection.md) — 月次振り返り（weekly-reflection.mdの30日版、差分のみ記載）
+- [mood-artifact.md](./mood-artifact.md) — 気分推移Artifact（`気分: N/10`を折れ線グラフ化する自己完結型HTMLの生成手順・Claude Desktop / Claude.aiのみ）
 
 ## 将来の自動化（Misskey Bot）について
 
