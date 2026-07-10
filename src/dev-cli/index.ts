@@ -10,6 +10,7 @@ import { openDatabase } from "../storage/db.js";
 import { BehavioralActivationStore } from "../storage/behavioral-activation-store.js";
 import { CheckinStore } from "../storage/checkin-store.js";
 import { GratitudeStore } from "../storage/gratitude-store.js";
+import { MedicationStore } from "../storage/medication-store.js";
 import { RateLimitStore } from "../storage/rate-limit-store.js";
 import { SafetyIncidentStore } from "../storage/safety-incident-store.js";
 import { SessionStore } from "../storage/session-store.js";
@@ -27,6 +28,7 @@ async function main(): Promise<void> {
   const thoughtRecordStore = new ThoughtRecordStore(db);
   const gratitudeStore = new GratitudeStore(db);
   const activationStore = new BehavioralActivationStore(db);
+  const medicationStore = new MedicationStore(db);
   const rateLimitStore = new RateLimitStore(db);
   const safetyIncidentStore = new SafetyIncidentStore(db);
   const rateLimiter = new RateLimiter(
@@ -66,7 +68,7 @@ async function main(): Promise<void> {
     sessionStore,
     rateLimiter,
     safetyIncidentStore,
-    toolHandlerDeps: { checkinStore, thoughtRecordStore, gratitudeStore, activationStore },
+    toolHandlerDeps: { checkinStore, thoughtRecordStore, gratitudeStore, activationStore, medicationStore },
     now: () => new Date(),
   });
   if (bridge) {

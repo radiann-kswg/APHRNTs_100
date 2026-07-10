@@ -5,6 +5,7 @@ import { BehavioralActivationStore } from "../../../src/storage/behavioral-activ
 import { CheckinStore } from "../../../src/storage/checkin-store.js";
 import { openDatabase } from "../../../src/storage/db.js";
 import { GratitudeStore } from "../../../src/storage/gratitude-store.js";
+import { MedicationStore } from "../../../src/storage/medication-store.js";
 import { ThoughtRecordStore } from "../../../src/storage/thought-record-store.js";
 
 const NOW = new Date("2026-07-09T12:00:00.000Z");
@@ -39,6 +40,10 @@ describe("buildBotDigest", () => {
       { userId: "u1", date: "2026-07-08", item1: "晴れた", item2: "作業が進んだ", item3: "よく眠れた" },
       NOW,
     );
+    new MedicationStore(db).upsert(
+      { userId: "u1", date: "2026-07-08", morningTaken: true, nightTaken: false, prnCount: 1, prnNotes: "頭痛時" },
+      NOW,
+    );
 
     const digest = buildBotDigest(db, { days: 14, now: NOW });
 
@@ -52,6 +57,9 @@ describe("buildBotDigest", () => {
     expect(digest).toContain("[completed] 散歩");
     expect(digest).toContain("## 感謝日記");
     expect(digest).toContain("晴れた ／ 作業が進んだ ／ よく眠れた");
+    expect(digest).toContain("## 服薬記録");
+    expect(digest).toContain("朝済／日中—／食後—／夜未");
+    expect(digest).toContain("頓服1回（頭痛時）");
   });
 
   it("excludes records older than the requested period", () => {

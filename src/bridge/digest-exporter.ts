@@ -5,6 +5,7 @@ import type { CheckinRow } from "../storage/checkin-store.js";
 import type { ThoughtRecordRow } from "../storage/thought-record-store.js";
 import type { ActivityRow } from "../storage/behavioral-activation-store.js";
 import type { GratitudeRow } from "../storage/gratitude-store.js";
+import type { MedicationRow } from "../storage/medication-store.js";
 
 export interface DigestOptions {
   /** 何日分をダイジェストに含めるか */
@@ -48,6 +49,9 @@ export function buildBotDigest(db: Database, options: DigestOptions): string {
   const gratitudeEntries = db
     .prepare(`SELECT * FROM gratitude_logs WHERE date >= ?${ownerFilter} ORDER BY date ASC`)
     .all(...params(sinceDate)) as GratitudeRow[];
+  const medications = db
+    .prepare(`SELECT * FROM medication_logs WHERE date >= ?${ownerFilter} ORDER BY date ASC, user_id ASC`)
+    .all(...params(sinceDate)) as MedicationRow[];
 
   const lines: string[] = [
     "# Misskey Bot 記録ダイジェスト（自動生成）",
@@ -62,7 +66,11 @@ export function buildBotDigest(db: Database, options: DigestOptions): string {
   ];
 
   const hasAny =
-    checkins.length > 0 || thoughtRecords.length > 0 || activities.length > 0 || gratitudeEntries.length > 0;
+    checkins.length > 0 ||
+    thoughtRecords.length > 0 ||
+    activities.length > 0 ||
+    gratitudeEntries.length > 0 ||
+    medications.length > 0;
   if (!hasAny) {
     lines.push("対象期間内にMisskey Bot側の記録はない。");
     return lines.join("\n") + "\n";
@@ -120,6 +128,25 @@ export function buildBotDigest(db: Database, options: DigestOptions): string {
     lines.push("## 感謝日記", "");
     for (const row of gratitudeEntries) {
       lines.push(`- ${row.date}: ${[row.item1, row.item2, row.item3].filter(Boolean).join(" ／ ")}`);
+    }
+    lines.push("");
+  }
+
+  if (medications.length > 0) {
+    lines.push("## 服薬記録", "");
+    for (const row of medications) {
+      const slot = (value: number | null): string => (value === null ? "—" : value ? "済" : "未");
+      const parts = [
+        `朝${slot(row.morning_taken)}`,
+        `日中${slot(row.midday_taken)}`,
+        `食後${slot(row.after_meal_taken)}`,
+        `夜${slot(row.night_taken)}`,
+      ];
+      let line = `- ${row.date}: ${parts.join("／")}`;
+      if (row.prn_count !== null) line += ` ／ 頓服${row.prn_count}回`;
+      if (row.prn_notes) line += `（${row.prn_notes}）`;
+      if (row.notes) line += ` ／ メモ: ${row.notes}`;
+      lines.push(line);
     }
     lines.push("");
   }

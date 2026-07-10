@@ -5,6 +5,7 @@ import { BehavioralActivationStore } from "../../../../src/storage/behavioral-ac
 import { CheckinStore } from "../../../../src/storage/checkin-store.js";
 import { openDatabase } from "../../../../src/storage/db.js";
 import { GratitudeStore } from "../../../../src/storage/gratitude-store.js";
+import { MedicationStore } from "../../../../src/storage/medication-store.js";
 import { ThoughtRecordStore } from "../../../../src/storage/thought-record-store.js";
 
 describe("createToolExecutor", () => {
@@ -13,6 +14,7 @@ describe("createToolExecutor", () => {
   let thoughtRecordStore: ThoughtRecordStore;
   let gratitudeStore: GratitudeStore;
   let activationStore: BehavioralActivationStore;
+  let medicationStore: MedicationStore;
   let executeTool: (name: string, input: Record<string, unknown>) => Promise<string>;
 
   beforeEach(() => {
@@ -21,9 +23,10 @@ describe("createToolExecutor", () => {
     thoughtRecordStore = new ThoughtRecordStore(db);
     gratitudeStore = new GratitudeStore(db);
     activationStore = new BehavioralActivationStore(db);
+    medicationStore = new MedicationStore(db);
     executeTool = createToolExecutor(
       "user1",
-      { checkinStore, thoughtRecordStore, gratitudeStore, activationStore },
+      { checkinStore, thoughtRecordStore, gratitudeStore, activationStore, medicationStore },
       () => new Date("2026-01-01T00:00:00Z"),
     );
   });
@@ -33,6 +36,15 @@ describe("createToolExecutor", () => {
     const rows = checkinStore.listSince("user1", "2026-01-01");
     expect(rows).toHaveLength(1);
     expect(rows[0]?.mood).toBe(7);
+  });
+
+  it("save_medication persists a row with tri-state slots", async () => {
+    await executeTool("save_medication", { date: "2026-01-01", morningTaken: true, nightTaken: false });
+    const rows = medicationStore.listSince("user1", "2026-01-01");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.morning_taken).toBe(1);
+    expect(rows[0]?.night_taken).toBe(0);
+    expect(rows[0]?.midday_taken).toBeNull();
   });
 
   it("save_thought_record persists a row", async () => {

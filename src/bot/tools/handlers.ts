@@ -1,6 +1,7 @@
 import type { BehavioralActivationStore } from "../../storage/behavioral-activation-store.js";
 import type { CheckinStore } from "../../storage/checkin-store.js";
 import type { GratitudeStore } from "../../storage/gratitude-store.js";
+import type { MedicationStore } from "../../storage/medication-store.js";
 import type { ThoughtRecordStore } from "../../storage/thought-record-store.js";
 
 export interface ToolHandlerDeps {
@@ -8,6 +9,7 @@ export interface ToolHandlerDeps {
   thoughtRecordStore: ThoughtRecordStore;
   gratitudeStore: GratitudeStore;
   activationStore: BehavioralActivationStore;
+  medicationStore: MedicationStore;
 }
 
 function numberOrUndefined(value: unknown): number | undefined {
@@ -16,6 +18,10 @@ function numberOrUndefined(value: unknown): number | undefined {
 
 function stringOrUndefined(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
+}
+
+function booleanOrUndefined(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined;
 }
 
 function todayIso(now: Date): string {
@@ -44,6 +50,25 @@ export function createToolExecutor(
           now(),
         );
         return `チェックインを${row.date}分として保存したぞ。`;
+      }
+
+      case "save_medication": {
+        const date = stringOrUndefined(input.date) ?? todayIso(now());
+        deps.medicationStore.upsert(
+          {
+            userId,
+            date,
+            morningTaken: booleanOrUndefined(input.morningTaken),
+            middayTaken: booleanOrUndefined(input.middayTaken),
+            afterMealTaken: booleanOrUndefined(input.afterMealTaken),
+            nightTaken: booleanOrUndefined(input.nightTaken),
+            prnCount: numberOrUndefined(input.prnCount),
+            prnNotes: stringOrUndefined(input.prnNotes),
+            notes: stringOrUndefined(input.notes),
+          },
+          now(),
+        );
+        return `服薬の記録を${date}分として保存したぞ。`;
       }
 
       case "save_thought_record": {
