@@ -10,6 +10,7 @@ import { loadEnv } from "./config/env.js";
 import { MisskeyClient } from "./misskey/client.js";
 import { createDailyReflectionTask, createWeeklySummaryTask } from "./scheduler/index.js";
 import { TaskScheduler } from "./scheduler/task-scheduler.js";
+import { createTrendNudgeTask } from "./scheduler/trend-nudge-task.js";
 import { BehavioralActivationStore } from "./storage/behavioral-activation-store.js";
 import { BotStateStore } from "./storage/bot-state-store.js";
 import { CheckinStore } from "./storage/checkin-store.js";
@@ -138,6 +139,14 @@ async function main(): Promise<void> {
       sessionStore,
       misskeyClient,
       hour: env.DAILY_REFLECTION_HOUR,
+    }),
+    createTrendNudgeTask({
+      botStateStore,
+      sessionStore,
+      checkinStore,
+      medicationStore,
+      misskeyClient,
+      hour: env.TREND_NUDGE_HOUR,
     }),
   ]);
   scheduler.start();

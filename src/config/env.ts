@@ -27,6 +27,8 @@ const envSchema = z.object({
   WEEKLY_SUMMARY_DAY_OF_WEEK: z.coerce.number().int().min(0).max(6).default(0),
   WEEKLY_SUMMARY_HOUR: z.coerce.number().int().min(0).max(23).default(20),
   DAILY_REFLECTION_HOUR: z.coerce.number().int().min(0).max(23).default(20),
+  // 傾向検知（気分低下＋服薬ギャップ）による優しい声かけを1日1回チェックする時刻
+  TREND_NUDGE_HOUR: z.coerce.number().int().min(0).max(23).default(21),
 
   // Claude連携ブリッジ（logs/ ⇄ SQLite）
   CLAUDE_SYNC_ENABLED: z
