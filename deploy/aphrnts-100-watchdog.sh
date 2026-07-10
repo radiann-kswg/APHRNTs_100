@@ -67,8 +67,8 @@ if [ "$heartbeat_age" -gt "$STALE_THRESHOLD_SEC" ]; then
   exit 0
 fi
 
-ws_connected=$(grep -o '"wsConnected":[a-z]*' "$HEARTBEAT_PATH" | head -1 | cut -d: -f2)
-last_disconnected=$(grep -o '"lastDisconnectedAt":"[^"]*"' "$HEARTBEAT_PATH" | head -1 | cut -d: -f2- | tr -d '"')
+ws_connected=$(sed -n 's/.*"wsConnected":[[:space:]]*\([a-z]*\).*/\1/p' "$HEARTBEAT_PATH" | head -1)
+last_disconnected=$(sed -n 's/.*"lastDisconnectedAt":[[:space:]]*"\([^"]*\)".*/\1/p' "$HEARTBEAT_PATH" | head -1)
 
 if [ "$ws_connected" = "false" ] && [ -n "$last_disconnected" ]; then
   disconnected_epoch=$(date -d "$last_disconnected" +%s 2>/dev/null || echo "$now_epoch")
