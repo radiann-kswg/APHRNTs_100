@@ -3,6 +3,7 @@ import type { BehavioralActivationStore } from "../storage/behavioral-activation
 import type { BotStateStore } from "../storage/bot-state-store.js";
 import type { CheckinStore } from "../storage/checkin-store.js";
 import type { GratitudeStore } from "../storage/gratitude-store.js";
+import type { MedicationStore } from "../storage/medication-store.js";
 import type { SessionStore } from "../storage/session-store.js";
 import type { ThoughtRecordStore } from "../storage/thought-record-store.js";
 import { shouldRunDailyNow } from "./schedule-utils.js";
@@ -22,6 +23,7 @@ export interface WeeklySummaryTaskDeps {
   activationStore: BehavioralActivationStore;
   gratitudeStore: GratitudeStore;
   thoughtRecordStore: ThoughtRecordStore;
+  medicationStore: MedicationStore;
   misskeyClient: MisskeyClient;
   dayOfWeek: number;
   hour: number;
@@ -47,10 +49,13 @@ export function createWeeklySummaryTask(deps: WeeklySummaryTaskDeps): ScheduledT
             activationStore: deps.activationStore,
             gratitudeStore: deps.gratitudeStore,
             thoughtRecordStore: deps.thoughtRecordStore,
+            medicationStore: deps.medicationStore,
           },
           now,
         );
-        await deps.misskeyClient.postNote(trend, [userId]);
+        // センシティブな内容（気分・服薬の傾向）のため、公開の specified ノートではなく
+        // Misskeyのネイティブ Chat API（一対一メッセージ）経由で送る。
+        await deps.misskeyClient.sendChatMessage(userId, trend);
       }
 
       deps.botStateStore.set(WEEKLY_SUMMARY_LAST_RUN_KEY, now.toISOString(), now);
@@ -79,7 +84,7 @@ export function createDailyReflectionTask(deps: DailyReflectionTaskDeps): Schedu
 
       const userIds = deps.sessionStore.listKnownUserIds();
       for (const userId of userIds) {
-        await deps.misskeyClient.postNote(DAILY_REFLECTION_MESSAGE, [userId]);
+        await deps.misskeyClient.sendChatMessage(userId, DAILY_REFLECTION_MESSAGE);
       }
 
       deps.botStateStore.set(DAILY_REFLECTION_LAST_RUN_KEY, now.toISOString(), now);

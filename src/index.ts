@@ -130,6 +130,7 @@ async function main(): Promise<void> {
       activationStore,
       gratitudeStore,
       thoughtRecordStore,
+      medicationStore,
       misskeyClient,
       dayOfWeek: env.WEEKLY_SUMMARY_DAY_OF_WEEK,
       hour: env.WEEKLY_SUMMARY_HOUR,

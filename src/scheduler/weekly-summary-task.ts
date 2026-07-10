@@ -1,6 +1,7 @@
 import type { BehavioralActivationStore } from "../storage/behavioral-activation-store.js";
 import type { CheckinStore } from "../storage/checkin-store.js";
 import type { GratitudeStore } from "../storage/gratitude-store.js";
+import type { MedicationStore } from "../storage/medication-store.js";
 import type { ThoughtRecordStore } from "../storage/thought-record-store.js";
 import { shouldRunDailyNow } from "./schedule-utils.js";
 
@@ -9,6 +10,7 @@ export interface WeeklySummaryDeps {
   activationStore: BehavioralActivationStore;
   gratitudeStore: GratitudeStore;
   thoughtRecordStore: ThoughtRecordStore;
+  medicationStore: MedicationStore;
 }
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -30,9 +32,14 @@ export function buildWeeklyTrend(userId: string, deps: WeeklySummaryDeps, now: D
   const activities = deps.activationStore.listSince(userId, sinceIso);
   const gratitudeEntries = deps.gratitudeStore.listSince(userId, sinceDateStr);
   const thoughtRecords = deps.thoughtRecordStore.listSince(userId, sinceIso);
+  const medications = deps.medicationStore.listSince(userId, sinceDateStr);
 
   const hasAnyRecord =
-    checkins.length > 0 || activities.length > 0 || gratitudeEntries.length > 0 || thoughtRecords.length > 0;
+    checkins.length > 0 ||
+    activities.length > 0 ||
+    gratitudeEntries.length > 0 ||
+    thoughtRecords.length > 0 ||
+    medications.length > 0;
 
   if (!hasAnyRecord) {
     return "センパイ、この一週間はまだ記録がないみたいだな。無理にとは言わないが、気が向いたら今日の調子から聞かせてくれ。";
@@ -54,6 +61,11 @@ export function buildWeeklyTrend(userId: string, deps: WeeklySummaryDeps, now: D
   }
   if (thoughtRecords.length > 0) {
     lines.push(`思考記録にも${thoughtRecords.length}回向き合えてた。`);
+  }
+  if (medications.length > 0) {
+    const prnTotal = medications.reduce((sum, row) => sum + (row.prn_count ?? 0), 0);
+    const prnNote = prnTotal > 0 ? `（頓服は計${prnTotal}回）` : "";
+    lines.push(`服薬の記録は${medications.length}日分あった${prnNote}。`);
   }
   lines.push("この調子で、無理のない範囲でまた来週も一緒にやっていこう。");
 

@@ -3,6 +3,7 @@ import { BehavioralActivationStore } from "../../../src/storage/behavioral-activ
 import { CheckinStore } from "../../../src/storage/checkin-store.js";
 import { openDatabase } from "../../../src/storage/db.js";
 import { GratitudeStore } from "../../../src/storage/gratitude-store.js";
+import { MedicationStore } from "../../../src/storage/medication-store.js";
 import { ThoughtRecordStore } from "../../../src/storage/thought-record-store.js";
 import { buildWeeklyTrend, shouldRunNow } from "../../../src/scheduler/weekly-summary-task.js";
 
@@ -44,6 +45,7 @@ describe("buildWeeklyTrend", () => {
       activationStore: new BehavioralActivationStore(db),
       gratitudeStore: new GratitudeStore(db),
       thoughtRecordStore: new ThoughtRecordStore(db),
+      medicationStore: new MedicationStore(db),
     };
     const trend = buildWeeklyTrend("user1", deps, new Date("2026-01-08T00:00:00Z"));
     expect(trend).toContain("記録がない");
@@ -59,8 +61,25 @@ describe("buildWeeklyTrend", () => {
       activationStore: new BehavioralActivationStore(db),
       gratitudeStore: new GratitudeStore(db),
       thoughtRecordStore: new ThoughtRecordStore(db),
+      medicationStore: new MedicationStore(db),
     };
     const trend = buildWeeklyTrend("user1", deps, new Date("2026-01-08T00:00:00Z"));
     expect(trend).toContain("7.0");
+  });
+
+  it("includes a medication line when medication records exist", () => {
+    const db = openDatabase(":memory:");
+    const medicationStore = new MedicationStore(db);
+    medicationStore.upsert({ userId: "user1", date: "2026-01-05", morningTaken: true, prnCount: 2 });
+    const deps = {
+      checkinStore: new CheckinStore(db),
+      activationStore: new BehavioralActivationStore(db),
+      gratitudeStore: new GratitudeStore(db),
+      thoughtRecordStore: new ThoughtRecordStore(db),
+      medicationStore,
+    };
+    const trend = buildWeeklyTrend("user1", deps, new Date("2026-01-08T00:00:00Z"));
+    expect(trend).toContain("服薬の記録は1日分あった");
+    expect(trend).toContain("頓服は計2回");
   });
 });

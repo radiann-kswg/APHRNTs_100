@@ -121,6 +121,7 @@ async function main(): Promise<void> {
           activationStore,
           gratitudeStore,
           thoughtRecordStore,
+          medicationStore,
         });
         console.log(`100(モモ)> ${trend}`);
         continue;

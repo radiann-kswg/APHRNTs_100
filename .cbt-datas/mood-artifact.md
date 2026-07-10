@@ -1,4 +1,4 @@
-# 気分推移Artifact — 生成ガイド（Claude Desktop / Claude.aiのみ）
+# 気分推移・服薬アドヒアランスArtifact — 生成ガイド（Claude Desktop / Claude.aiのみ）
 
 週次・月次の振り返りで、`logs/` に溜まった気分の数値記録を**自己完結型HTML（Artifact）**として折れ線グラフ化し、センパイが自分の気分の流れを一目で振り返れるようにするための機能ガイドです。この機能はArtifactを表示できる**Claude Desktop / Claude.ai**でのみ使えます（Claude Code / GitHub Copilot Chat / Misskey Botはグラフ描画の対象外で、これらは従来どおり[weekly-reflection.md](./weekly-reflection.md) の言葉での振り返りを行う）。
 
@@ -29,9 +29,25 @@ node scripts/extract-mood.mjs             # 全期間
 4. 期間切り替え（週次7日／月次30日／全期間）のボタンを付けると、同じArtifactで両方の振り返りに使える。
 5. Cowork環境では `create_artifact` でサイドバーに保存する（id例: `mood-trend`）。既存Artifactの更新は `update_artifact` で最新データに差し替える（毎回新規作成しない）。
 
+## 服薬アドヒアランスの重ね合わせ（任意）
+
+気分推移に加えて、服薬アドヒアランス（朝・日中・食後・夜の服用有無、頓服の回数）を重ねて表示すると、気分の落ち込みと服薬の抜けの関係をセンパイ自身が眺める材料になる。
+
+- データ源: `logs/YYYY-MM-DD.md` の「## 服薬」セクション（[logs/README.mdの服薬の記録について](../logs/README.md#服薬の記録について)の書式）、または`logs/bot-digest.md`の「## 服薬記録」セクション（Misskey Botの`save_medication`ツールで保存された分）。
+- 抽出は同梱のスクリプト `scripts/extract-medication.mjs`（`extract-mood.mjs`と同じ設計思想。読み取り専用・値を捏造しない）で機械的に行う。
+
+  ```bash
+  node scripts/extract-medication.mjs --days=7    # 週次（直近7日）
+  node scripts/extract-medication.mjs --days=30   # 月次（直近30日）
+  ```
+
+  出力は `{ generatedAt, days, entries: [{ date, morningTaken, middayTaken, afterMealTaken, nightTaken, prn }] }` のJSON（各`xxxTaken`は`true`/`false`/`null`、`prn`は自由記述または`null`）。
+- `extract-mood.mjs`の`entries`と`date`キーで突き合わせ（Map結合で十分、追加のマージ用スクリプトは不要）、気分の折れ線の下に服薬スロット達成状況（1日あたり0〜4スロット済）のバー/ヒートマップを重ね、`prn`が記録されている日にはマーカー・ツールチップを付ける。
+- あくまで視覚的に眺めるための重ね合わせであり、傾向の自動判定（気分低下＋服薬ギャップの検知）はMisskey Bot側の傾向検知タスク（`src/scheduler/trend-nudge-task.ts`）が別途担う。本Artifactでは断定的な相関を主張しない。
+
 ## 空データ時の扱い
 
-気分の数値記録が0件のときは、グラフ領域に「まだ数値の気分記録がない。夜の振り返りで `気分: N/10` を残すと、ここに推移が出る」という空状態メッセージを出す。責める調子にはせず、[weekly-reflection.md の注意](./weekly-reflection.md#注意)に従う。
+気分の数値記録が0件のときは、グラフ領域に「まだ数値の気分記録がない。夜の振り返りで `気分: N/10` を残すと、ここに推移が出る」という空状態メッセージを出す。責める調子にはせず、[weekly-reflection.md の注意](./weekly-reflection.md#注意)に従う。服薬データのみ0件の場合も同様に、服薬の重ね合わせ部分だけ空状態表示にとどめ、気分グラフ自体は通常どおり描画する（どちらか一方が欠けても他方の表示を妨げない）。
 
 ## 制約
 
