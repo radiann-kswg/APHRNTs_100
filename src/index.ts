@@ -1,8 +1,9 @@
 import { createAIProvider } from "./ai/index.js";
+import { createChatHandler } from "./bot/handlers/chat.js";
 import { createMentionHandler } from "./bot/handlers/mention.js";
 import { loadPersonaContent } from "./bot/character/loader.js";
 import { buildSystemPrompt } from "./bot/character/prompt-builder.js";
-import { createMessagePipeline } from "./bot/pipeline.js";
+import { createMessagePipeline, type Channel } from "./bot/pipeline.js";
 import { createBridgeRuntime } from "./bridge/runtime.js";
 import { RateLimiter } from "./bot/ratelimit/index.js";
 import { loadEnv } from "./config/env.js";
@@ -61,8 +62,9 @@ async function main(): Promise<void> {
 
   const persona = loadPersonaContent();
   const systemPrompt = bridge
-    ? (userId: string) => buildSystemPrompt(persona, { claudeNotesSection: bridge.notesSectionFor(userId) })
-    : buildSystemPrompt(persona);
+    ? (userId: string, channel: Channel) =>
+        buildSystemPrompt(persona, { claudeNotesSection: bridge.notesSectionFor(userId), channel })
+    : (_userId: string, channel: Channel) => buildSystemPrompt(persona, { channel });
   const aiProvider = createAIProvider(env);
 
   let handleMessage = createMessagePipeline({
@@ -90,14 +92,22 @@ async function main(): Promise<void> {
 
   const misskeyClient = new MisskeyClient({ host: env.MISSKEY_HOST, token: env.MISSKEY_TOKEN });
   const onMention = createMentionHandler(handleMessage, misskeyClient);
+  const onChatMessage = createChatHandler(handleMessage, misskeyClient);
   let wsConnected = false;
   let lastConnectedAt: string | null = null;
 
-  misskeyClient.connect((note) => {
-    onMention(note).catch((error: unknown) => {
-      logger.error("mention処理でエラーが発生した", error);
-    });
-  });
+  misskeyClient.connect(
+    (note) => {
+      onMention(note).catch((error: unknown) => {
+        logger.error("mention処理でエラーが発生した", error);
+      });
+    },
+    (message) => {
+      onChatMessage(message).catch((error: unknown) => {
+        logger.error("一対一チャット処理でエラーが発生した", error);
+      });
+    },
+  );
   wsConnected = true;
   lastConnectedAt = new Date().toISOString();
   logger.info("Misskeyへの接続を開始した。");

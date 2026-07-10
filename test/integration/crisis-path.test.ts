@@ -51,4 +51,40 @@ describe("pipeline crisis short-circuit", () => {
       | undefined;
     expect(incidentRow?.channel).toBe("misskey");
   });
+
+  it("short-circuits identically on the misskey-chat (1:1 messaging) channel", async () => {
+    const db = openDatabase(":memory:");
+    const sessionStore = new SessionStore(db);
+    const checkinStore = new CheckinStore(db);
+    const thoughtRecordStore = new ThoughtRecordStore(db);
+    const gratitudeStore = new GratitudeStore(db);
+    const activationStore = new BehavioralActivationStore(db);
+    const rateLimitStore = new RateLimitStore(db);
+    const safetyIncidentStore = new SafetyIncidentStore(db);
+    const rateLimiter = new RateLimiter(rateLimitStore, 30 * 60 * 1000, 1);
+
+    const generateReply = vi.fn();
+    const aiProvider: AIProvider = { name: "anthropic", generateReply };
+
+    const handleMessage = createMessagePipeline({
+      aiProvider,
+      systemPrompt: "test",
+      sessionStore,
+      rateLimiter,
+      safetyIncidentStore,
+      toolHandlerDeps: { checkinStore, thoughtRecordStore, gratitudeStore, activationStore },
+      now: () => new Date("2026-01-01T10:00:00Z"),
+    });
+
+    const result = await handleMessage("user1", "もう死にたい", "misskey-chat");
+
+    expect(result.suppressed).toBe(false);
+    expect(result.replyText).toContain("0120-279-338");
+    expect(generateReply).not.toHaveBeenCalled();
+
+    const incidentRow = db.prepare("SELECT * FROM safety_incidents WHERE user_id = ?").get("user1") as
+      | { channel: string }
+      | undefined;
+    expect(incidentRow?.channel).toBe("misskey-chat");
+  });
 });

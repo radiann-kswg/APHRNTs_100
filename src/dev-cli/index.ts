@@ -2,7 +2,7 @@ import readline from "node:readline/promises";
 import { createAIProvider } from "../ai/index.js";
 import { loadPersonaContent } from "../bot/character/loader.js";
 import { buildSystemPrompt } from "../bot/character/prompt-builder.js";
-import { createMessagePipeline } from "../bot/pipeline.js";
+import { createMessagePipeline, type Channel } from "../bot/pipeline.js";
 import { RateLimiter } from "../bot/ratelimit/index.js";
 import { createBridgeRuntime } from "../bridge/runtime.js";
 import { loadEnv } from "../config/env.js";
@@ -55,8 +55,9 @@ async function main(): Promise<void> {
 
   const persona = loadPersonaContent();
   const systemPrompt = bridge
-    ? (userId: string) => buildSystemPrompt(persona, { claudeNotesSection: bridge.notesSectionFor(userId) })
-    : buildSystemPrompt(persona);
+    ? (userId: string, channel: Channel) =>
+        buildSystemPrompt(persona, { claudeNotesSection: bridge.notesSectionFor(userId), channel })
+    : (_userId: string, channel: Channel) => buildSystemPrompt(persona, { channel });
   const aiProvider = createAIProvider(env);
 
   let handleMessage = createMessagePipeline({

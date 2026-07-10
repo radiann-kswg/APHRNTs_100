@@ -6,17 +6,18 @@ import { buildCrisisResponse, checkForCrisis } from "./safety/crisis-detector.js
 import { ALL_TOOLS } from "./tools/definitions.js";
 import { createToolExecutor, type ToolHandlerDeps } from "./tools/handlers.js";
 
-export type Channel = "misskey" | "cli";
+export type Channel = "misskey" | "misskey-chat" | "cli";
 
 export interface PipelineDeps {
   aiProvider: AIProvider;
   /**
    * システムプロンプト。関数を渡すとメッセージ処理のたびに評価されるため、
    * Claude連携ブリッジで取り込んだ最新のセッション記録を都度反映できる。
-   * 引数として発言ユーザーのIDを受け取るため、ユーザーごとに内容を変えられる
-   * （例: BOT_OWNER_USER_ID 設定時、オーナー以外にはlogs/の記録を注入しない）。
+   * 引数として発言ユーザーのIDとチャンネルを受け取るため、ユーザーごと・
+   * チャンネルごとに内容を変えられる（例: BOT_OWNER_USER_ID 設定時、オーナー以外には
+   * logs/の記録を注入しない。misskey-chatでは一対一チャットへの移行提案が不要、等）。
    */
-  systemPrompt: string | ((userId: string) => string);
+  systemPrompt: string | ((userId: string, channel: Channel) => string);
   sessionStore: SessionStore;
   rateLimiter: RateLimiter;
   safetyIncidentStore: SafetyIncidentStore;
@@ -57,7 +58,8 @@ export function createMessagePipeline(deps: PipelineDeps): MessageHandler {
     const messages: ChatMessage[] = [...history, { role: "user", content: text }];
 
     const executeTool = createToolExecutor(userId, deps.toolHandlerDeps, () => now);
-    const systemPrompt = typeof deps.systemPrompt === "function" ? deps.systemPrompt(userId) : deps.systemPrompt;
+    const systemPrompt =
+      typeof deps.systemPrompt === "function" ? deps.systemPrompt(userId, channel) : deps.systemPrompt;
     const result = await deps.aiProvider.generateReply({
       systemPrompt,
       messages,
