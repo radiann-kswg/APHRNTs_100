@@ -20,7 +20,7 @@ function staticProvider(text: string): AIProvider {
 }
 
 describe("pipeline rate limit exemption", () => {
-  it("allows rapid follow-up messages during an active conversation, but enforces cooldown afterwards", async () => {
+  it("keeps replying through an ongoing conversation even with a several-minute pause between turns", async () => {
     const db = openDatabase(":memory:");
     const sessionStore = new SessionStore(db);
     const checkinStore = new CheckinStore(db);
@@ -46,14 +46,15 @@ describe("pipeline rate limit exemption", () => {
     const first = await handleMessage("user1", "こんにちは", "misskey");
     expect(first.suppressed).toBe(false);
 
-    // 1分後の会話継続（アクティブな会話ウィンドウ内）は除外扱いになる
+    // 1分後の会話継続は除外扱いになる
     now = new Date(now.getTime() + 60 * 1000);
     const second = await handleMessage("user1", "続きだけど", "misskey");
     expect(second.suppressed).toBe(false);
 
-    // さらに10分後（アクティブウィンドウ外）はcooldownが効く
+    // さらに10分後（考えて長めの返信をする間の自然な間隔）でも、
+    // クールダウン期間内である限り会話継続として扱われ、黙って無視されない
     now = new Date(now.getTime() + 10 * 60 * 1000);
     const third = await handleMessage("user1", "また来た", "misskey");
-    expect(third.suppressed).toBe(true);
+    expect(third.suppressed).toBe(false);
   });
 });
