@@ -1,4 +1,3 @@
-import { ACTIVE_CONVERSATION_WINDOW_MS } from "../../config/constants.js";
 import type { RateLimitStore } from "../../storage/rate-limit-store.js";
 
 export interface RateLimitDecision {
@@ -14,9 +13,12 @@ export class RateLimiter {
     private readonly globalPerHour: number,
   ) {}
 
+  // 猶予期間をcooldownMsと同じ長さにすることで、会話が続いている間は返信までの
+  // 間隔がどれだけあいても黙って抑制されない（以前は5分の固定値だったため、
+  // 5〜30分の間隔で返信すると無言のままクールダウン扱いになっていた）。
   private isExempt(lastInteractionAt: Date | null, now: Date): boolean {
     if (!lastInteractionAt) return false;
-    return now.getTime() - lastInteractionAt.getTime() <= ACTIVE_CONVERSATION_WINDOW_MS;
+    return now.getTime() - lastInteractionAt.getTime() <= this.cooldownMs;
   }
 
   check(userId: string, lastInteractionAt: Date | null, now: Date = new Date()): RateLimitDecision {

@@ -10,9 +10,6 @@ export const AI_REQUEST_TIMEOUT_MS = 30_000;
 export const SESSION_TTL_MS = 30 * 60 * 1000;
 export const SESSION_MAX_MESSAGES = 24;
 
-// 直近のやり取りがあるユーザーは、レートリミットの対象外として扱う猶予時間。
-export const ACTIVE_CONVERSATION_WINDOW_MS = 5 * 60 * 1000;
-
 export const CHARACTER_NAME = "100(モモ)";
 
 // Claude連携ブリッジ（logs/ ⇄ SQLite）の既定値
