@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI, type Content, type FunctionDeclaration } from "@google/generative-ai";
-import { DEFAULT_GEMINI_MODEL } from "../config/constants.js";
+import { AI_REQUEST_TIMEOUT_MS, DEFAULT_GEMINI_MODEL } from "../config/constants.js";
 import type { AIProvider, GenerateReplyParams, GenerateReplyResult, ToolInvocation } from "./provider.js";
 
 const MAX_TOOL_TURNS = 5;
@@ -31,7 +31,7 @@ export function createGeminiProvider(apiKey: string, model?: string): AIProvider
       const lastMessage = messages[messages.length - 1];
 
       const chat = generativeModel.startChat({ history });
-      let result = await chat.sendMessage(lastMessage?.content ?? "");
+      let result = await chat.sendMessage(lastMessage?.content ?? "", { timeout: AI_REQUEST_TIMEOUT_MS });
 
       const toolInvocations: ToolInvocation[] = [];
       let finalText = "";
@@ -52,7 +52,7 @@ export function createGeminiProvider(apiKey: string, model?: string): AIProvider
           });
         }
 
-        result = await chat.sendMessage(responses);
+        result = await chat.sendMessage(responses, { timeout: AI_REQUEST_TIMEOUT_MS });
       }
 
       return { text: finalText, toolInvocations };

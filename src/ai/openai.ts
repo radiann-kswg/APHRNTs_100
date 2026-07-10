@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { DEFAULT_OPENAI_MODEL } from "../config/constants.js";
+import { AI_REQUEST_TIMEOUT_MS, DEFAULT_OPENAI_MODEL } from "../config/constants.js";
 import type { AIProvider, GenerateReplyParams, GenerateReplyResult, ToolInvocation } from "./provider.js";
 
 const MAX_TOOL_TURNS = 5;
@@ -34,11 +34,14 @@ export function createOpenAIProvider(apiKey: string, model?: string): AIProvider
       let finalText = "";
 
       for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
-        const response = await client.chat.completions.create({
-          model: resolvedModel,
-          messages: conversation,
-          tools: openaiTools.length > 0 ? openaiTools : undefined,
-        });
+        const response = await client.chat.completions.create(
+          {
+            model: resolvedModel,
+            messages: conversation,
+            tools: openaiTools.length > 0 ? openaiTools : undefined,
+          },
+          { timeout: AI_REQUEST_TIMEOUT_MS },
+        );
 
         const message = response.choices[0]?.message;
         if (!message) break;

@@ -2,6 +2,10 @@ export const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-5";
 export const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
 export const DEFAULT_GEMINI_MODEL = "gemini-1.5-flash";
 
+// AIプロバイダーへの1リクエストあたりのタイムアウト。上流APIがハングした際に
+// プロセスは生きたまま無応答になり続けるのを防ぐため、有限時間で失敗させる。
+export const AI_REQUEST_TIMEOUT_MS = 30_000;
+
 // セッション（会話履歴）の保持ポリシー。参考repoのSessionStore（30分TTL）を踏襲。
 export const SESSION_TTL_MS = 30 * 60 * 1000;
 export const SESSION_MAX_MESSAGES = 24;
