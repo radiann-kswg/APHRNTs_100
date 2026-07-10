@@ -51,7 +51,7 @@
 
 - より構造的なCBT的セルフケアを行いたい場合は、[.cbt-datas/](./.cbt-datas/)配下の各ガイドに従うこと。日次チェックイン・思考記録・行動活性化・感謝日記・週次振り返り・月次振り返りの6つの機能があり、詳細な進め方や口調の例は[.cbt-datas/README.md](./.cbt-datas/README.md)を参照する。
 - これらの機能はClaude Desktop・Claude Code・GitHub Copilot Chatのいずれでも、コードを実行せず会話のみで案内できる。Misskey AI Bot（`src/`）でも同じコンテンツを再利用する。
-- 記録の保存は本セクション冒頭の方針（センパイの意思確認）に従うこと。
+- 記録の保存は本セクション冒頭の方針（センパイの意思確認）に従うこと。ただし日次チェックインについては例外があり、詳細は[.cbt-datas/README.mdのルール3](./.cbt-datas/README.md#全機能共通のルール)を参照する。
 
 ### Claude連携ブリッジ（Misskey Bot ⇄ Claude）
 
