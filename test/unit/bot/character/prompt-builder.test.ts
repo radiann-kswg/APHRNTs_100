@@ -33,4 +33,22 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("センパイのClaudeセッション記録");
     expect(prompt).toContain("公開投稿で内容の詳細を復唱・言及しないこと");
   });
+
+  it("defaults to the mention-channel chat-nudge guidance when no channel is specified", () => {
+    const prompt = buildSystemPrompt({ roleplayPrompt: "R", cbtDatas: [] });
+    expect(prompt).toContain("一対一メッセージで続けよう");
+    expect(prompt).toContain("300文字以内");
+  });
+
+  it("suggests switching to 1:1 chat on the mention channel", () => {
+    const prompt = buildSystemPrompt({ roleplayPrompt: "R", cbtDatas: [] }, { channel: "misskey" });
+    expect(prompt).toContain("一対一メッセージで続けよう");
+    expect(prompt).toContain("300文字以内");
+  });
+
+  it("does not suggest switching channels, and relaxes brevity, on the misskey-chat channel", () => {
+    const prompt = buildSystemPrompt({ roleplayPrompt: "R", cbtDatas: [] }, { channel: "misskey-chat" });
+    expect(prompt).not.toContain("一対一メッセージで続けよう");
+    expect(prompt).toContain("既に一対一のチャット");
+  });
 });

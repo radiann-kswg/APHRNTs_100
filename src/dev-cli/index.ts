@@ -2,7 +2,7 @@ import readline from "node:readline/promises";
 import { createAIProvider } from "../ai/index.js";
 import { loadPersonaContent } from "../bot/character/loader.js";
 import { buildSystemPrompt } from "../bot/character/prompt-builder.js";
-import { createMessagePipeline } from "../bot/pipeline.js";
+import { createMessagePipeline, type Channel } from "../bot/pipeline.js";
 import { RateLimiter } from "../bot/ratelimit/index.js";
 import { createBridgeRuntime } from "../bridge/runtime.js";
 import { loadEnv } from "../config/env.js";
@@ -10,6 +10,7 @@ import { openDatabase } from "../storage/db.js";
 import { BehavioralActivationStore } from "../storage/behavioral-activation-store.js";
 import { CheckinStore } from "../storage/checkin-store.js";
 import { GratitudeStore } from "../storage/gratitude-store.js";
+import { MedicationStore } from "../storage/medication-store.js";
 import { RateLimitStore } from "../storage/rate-limit-store.js";
 import { SafetyIncidentStore } from "../storage/safety-incident-store.js";
 import { SessionStore } from "../storage/session-store.js";
@@ -27,6 +28,7 @@ async function main(): Promise<void> {
   const thoughtRecordStore = new ThoughtRecordStore(db);
   const gratitudeStore = new GratitudeStore(db);
   const activationStore = new BehavioralActivationStore(db);
+  const medicationStore = new MedicationStore(db);
   const rateLimitStore = new RateLimitStore(db);
   const safetyIncidentStore = new SafetyIncidentStore(db);
   const rateLimiter = new RateLimiter(
@@ -55,8 +57,9 @@ async function main(): Promise<void> {
 
   const persona = loadPersonaContent();
   const systemPrompt = bridge
-    ? (userId: string) => buildSystemPrompt(persona, { claudeNotesSection: bridge.notesSectionFor(userId) })
-    : buildSystemPrompt(persona);
+    ? (userId: string, channel: Channel) =>
+        buildSystemPrompt(persona, { claudeNotesSection: bridge.notesSectionFor(userId), channel })
+    : (_userId: string, channel: Channel) => buildSystemPrompt(persona, { channel });
   const aiProvider = createAIProvider(env);
 
   let handleMessage = createMessagePipeline({
@@ -65,7 +68,7 @@ async function main(): Promise<void> {
     sessionStore,
     rateLimiter,
     safetyIncidentStore,
-    toolHandlerDeps: { checkinStore, thoughtRecordStore, gratitudeStore, activationStore },
+    toolHandlerDeps: { checkinStore, thoughtRecordStore, gratitudeStore, activationStore, medicationStore },
     now: () => new Date(),
   });
   if (bridge) {
@@ -118,6 +121,7 @@ async function main(): Promise<void> {
           activationStore,
           gratitudeStore,
           thoughtRecordStore,
+          medicationStore,
         });
         console.log(`100(モモ)> ${trend}`);
         continue;

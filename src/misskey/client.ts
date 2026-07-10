@@ -6,6 +6,14 @@ export interface MentionNote {
   text: string;
 }
 
+/** Misskeyのネイティブ Chat API（chat/messages/*）による一対一メッセージの受信ペイロード */
+export interface IncomingChatMessage {
+  id: string;
+  fromUserId: string;
+  text: string;
+  createdAt: string;
+}
+
 export interface MisskeyClientOptions {
   host: string;
   token: string;
@@ -13,9 +21,12 @@ export interface MisskeyClientOptions {
 
 // 実際のMisskeyインスタンスへのライブ接続・メンション応答（main チャンネルの
 // mention イベント）を実機確認済み（2026-07-09、GCE本番デプロイでのテスト）。
+// 一対一チャット（newChatMessageイベント・chat/messages/create-to-user）は
+// 静的型定義（misskey-js@2025.2.0）に基づく実装。本番投入前に実機確認が必要。
 export class MisskeyClient {
   private stream: InstanceType<typeof Misskey.Stream> | null = null;
   private readonly api: InstanceType<typeof Misskey.api.APIClient>;
+  private myUserIdPromise: Promise<string> | null = null;
 
   constructor(private readonly options: MisskeyClientOptions) {
     this.api = new Misskey.api.APIClient({
@@ -24,7 +35,7 @@ export class MisskeyClient {
     });
   }
 
-  connect(onMention: (note: MentionNote) => void): void {
+  connect(onMention: (note: MentionNote) => void, onChatMessage?: (message: IncomingChatMessage) => void): void {
     this.stream = new Misskey.Stream(this.options.host, { token: this.options.token });
 
     this.stream.on("_connected_", () => {
@@ -43,6 +54,35 @@ export class MisskeyClient {
         text: typedNote.text ?? "",
       });
     });
+
+    if (onChatMessage) {
+      mainChannel.on("newChatMessage", (payload) => {
+        const typed = payload as {
+          id: string;
+          fromUserId: string;
+          toUserId?: string | null;
+          toRoomId?: string | null;
+          text?: string | null;
+          createdAt: string;
+        };
+        // v1はルームチャット（toRoomId）は対象外、一対一（toUserId）のみ扱う
+        if (!typed.toUserId) {
+          return;
+        }
+        void this.myUserId().then((myId) => {
+          // Botが自ら送信したメッセージがストリームでエコーされる場合に備えたガード
+          if (typed.fromUserId === myId) {
+            return;
+          }
+          onChatMessage({
+            id: typed.id,
+            fromUserId: typed.fromUserId,
+            text: typed.text ?? "",
+            createdAt: typed.createdAt,
+          });
+        });
+      });
+    }
   }
 
   async reply(replyToNoteId: string, text: string): Promise<void> {
@@ -52,13 +92,23 @@ export class MisskeyClient {
     });
   }
 
-  /** visibleUserIdsを指定した「特定ユーザー宛て」ノートを投稿する（週次振り返り等の能動的な通知用） */
+  /** visibleUserIdsを指定した「特定ユーザー宛て」ノートを投稿する（レガシー・フォールバック用途） */
   async postNote(text: string, visibleUserIds?: string[]): Promise<void> {
     await this.api.request("notes/create", {
       text,
       visibility: visibleUserIds && visibleUserIds.length > 0 ? "specified" : "public",
       visibleUserIds,
     });
+  }
+
+  /** Misskeyのネイティブ Chat API 経由で、指定ユーザーへ一対一メッセージを送信する */
+  async sendChatMessage(toUserId: string, text: string): Promise<void> {
+    await this.api.request("chat/messages/create-to-user", { toUserId, text });
+  }
+
+  private myUserId(): Promise<string> {
+    this.myUserIdPromise ??= this.api.request("i", {}).then((me) => me.id);
+    return this.myUserIdPromise;
   }
 
   disconnect(): void {

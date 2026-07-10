@@ -33,6 +33,26 @@ export const SAVE_CHECKIN_TOOL: ToolDefinition = {
   },
 };
 
+export const SAVE_MEDICATION_TOOL: ToolDefinition = {
+  name: "save_medication",
+  description:
+    "服薬状況（朝・日中・食後・夜の服用有無、頓服〈発作時〉の回数・状況）をSQLiteに保存する。日次チェックインと同様、センパイの希望により事前の保存同意確認が不要な例外項目。雑談の中で服薬に触れた内容であっても、そのまま呼び出して保存してよい。ただし呼び出した後は必ず保存した事実をセンパイに伝えること（黙って保存しない）。薬の増減・変更の助言や指示は絶対に含めないこと（服用の有無を記録することに徹する）。",
+  inputSchema: {
+    type: "object",
+    properties: {
+      date: { type: "string", description: "YYYY-MM-DD形式の日付" },
+      morningTaken: { type: "boolean" },
+      middayTaken: { type: "boolean" },
+      afterMealTaken: { type: "boolean" },
+      nightTaken: { type: "boolean" },
+      prnCount: { type: "integer", minimum: 0 },
+      prnNotes: { type: "string" },
+      notes: { type: "string" },
+    },
+    required: ["date"],
+  },
+};
+
 export const SAVE_THOUGHT_RECORD_TOOL: ToolDefinition = {
   name: "save_thought_record",
   description:
@@ -88,6 +108,7 @@ export const SAVE_ACTIVITY_TOOL: ToolDefinition = {
 
 export const ALL_TOOLS: ToolDefinition[] = [
   SAVE_CHECKIN_TOOL,
+  SAVE_MEDICATION_TOOL,
   SAVE_THOUGHT_RECORD_TOOL,
   SAVE_GRATITUDE_TOOL,
   SAVE_ACTIVITY_TOOL,

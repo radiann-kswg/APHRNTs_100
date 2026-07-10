@@ -1,6 +1,6 @@
 import type { Database } from "better-sqlite3";
 
-export type SafetyChannel = "misskey" | "cli";
+export type SafetyChannel = "misskey" | "misskey-chat" | "cli";
 
 export class SafetyIncidentStore {
   constructor(private readonly db: Database) {}

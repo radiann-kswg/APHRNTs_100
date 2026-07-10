@@ -10,6 +10,7 @@ describe("loadEnv", () => {
     expect(env.WEEKLY_SUMMARY_DAY_OF_WEEK).toBe(0);
     expect(env.WEEKLY_SUMMARY_HOUR).toBe(20);
     expect(env.DAILY_REFLECTION_HOUR).toBe(20);
+    expect(env.TREND_NUDGE_HOUR).toBe(21);
     expect(env.BOT_DIGEST_DAYS).toBe(14);
     expect(env.GCE_PROJECT).toBe("numbertales-misskey-surver");
     expect(env.GCE_ZONE).toBe("asia-northeast1-a");

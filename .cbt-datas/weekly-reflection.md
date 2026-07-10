@@ -6,7 +6,7 @@
 
 - **Claude Code / GitHub Copilot Chat**: リポジトリ内の`logs/*.md`を直接読み、直近7日分程度の「体調・気分」「睡眠・生活習慣」「創作活動の進捗」等を確認できる。
 - **Claude Desktop**: リポジトリのファイルを直接読むことはできないため、センパイが該当する`logs/*.md`をプロジェクトの知識（Project knowledge）としてアップロードしている場合のみ参照可能。アップロードされていない場合は、無理に過去分を推測せず、その場でセンパイに直近の様子を聞く形に切り替える。
-- **Misskey Bot（`src/`実装）**: SQLiteに保存された`daily_checkins`・`behavioral_activation_logs`・`gratitude_logs`・`thought_records`の直近7日分を集計する。
+- **Misskey Bot（`src/`実装）**: SQLiteに保存された`daily_checkins`・`behavioral_activation_logs`・`gratitude_logs`・`thought_records`・`medication_logs`の直近7日分を集計する。
 
 ## 進め方
 
@@ -29,4 +29,4 @@ Claude Desktop・Claude.aiでは、振り返りの最後に「グラフにして
 - Claude Code・GitHub Copilot ChatはArtifact機能を持たないため、この節はClaude Desktop / Claude.aiでの振り返り時のみ提案すること。
 - 記録が少ない・数値化されていない日は無理に補完せず、「記録がある範囲だけ」を可視化する。
 - 診断・評価のためのグラフではなく、センパイ自身が傾向を眺めるための道具として提示する（[全機能共通のルール](./README.md#全機能共通のルール)参照）。
-- 具体的な抽出・生成手順（`scripts/extract-mood.mjs` での数値抽出、Chart.jsでの描画、`create_artifact`/`update_artifact` での保存・更新、空データ時の扱い）は [mood-artifact.md](./mood-artifact.md) を参照する。月次振り返りでは対象期間を30日にするだけで同じ要領で使える。
+- 具体的な抽出・生成手順（`scripts/extract-mood.mjs` での数値抽出、Chart.jsでの描画、`create_artifact`/`update_artifact` での保存・更新、空データ時の扱い、`scripts/extract-medication.mjs` を使った服薬アドヒアランスの重ね合わせ）は [mood-artifact.md](./mood-artifact.md) を参照する。月次振り返りでは対象期間を30日にするだけで同じ要領で使える。

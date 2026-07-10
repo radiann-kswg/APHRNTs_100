@@ -5,8 +5,8 @@
 ## 使い方
 
 - 下の「テンプレート」ブロックをコピーして日付を入れ、書ける欄だけ埋める。全部埋めなくていい。
-- 見出しは [logs/README.md](../logs/README.md) のフォーマットに合わせてあるので、そのまま `logs/YYYY-MM-DD.md` として保存すれば、Claude連携ブリッジ経由でMisskey Botにも引き継がれ、[気分推移Artifact](./mood-artifact.md) の `気分: N/10` も自動で拾える。
-- 会話で埋めたい場合は [daily-checkin.md](./daily-checkin.md) の聞き方に沿って100(モモ)が一緒に記入を手伝う。CBTの各欄は [thought-record.md](./thought-record.md) / [behavioral-activation.md](./behavioral-activation.md) / [gratitude.md](./gratitude.md) を参照。
+- 見出しは [logs/README.md](../logs/README.md) のフォーマットに合わせてあるので、そのまま `logs/YYYY-MM-DD.md` として保存すれば、Claude連携ブリッジ経由でMisskey Botにも引き継がれ、[気分推移Artifact](./mood-artifact.md) の `気分: N/10` も自動で拾える（服薬欄も同様に[logs/README.mdの服薬の記録について](../logs/README.md#服薬の記録について)の書式で機械的に拾われる）。
+- 会話で埋めたい場合は [daily-checkin.md](./daily-checkin.md) の聞き方に沿って100(モモ)が一緒に記入を手伝う。CBTの各欄は [thought-record.md](./thought-record.md) / [behavioral-activation.md](./behavioral-activation.md) / [gratitude.md](./gratitude.md) を参照。Misskey Botとの会話で服薬に触れた場合は、`save_medication`ツールで同様に構造化データとしても保存される。
 - 数値化を望まない欄は空欄・自由記述で構わない。**気分の数値を推測・捏造しない。**
 
 ## アイコン対応（紙シート → 見出し）

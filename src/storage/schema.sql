@@ -54,6 +54,23 @@ CREATE TABLE IF NOT EXISTS gratitude_logs (
   created_at TEXT NOT NULL
 );
 
+-- 服薬アドヒアランス（有無の記録のみ。増減・変更提案は含まない）
+CREATE TABLE IF NOT EXISTS medication_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL,
+  date TEXT NOT NULL,
+  morning_taken INTEGER,     -- NULL=未報告, 0=未服用, 1=服用済み
+  midday_taken INTEGER,
+  after_meal_taken INTEGER,
+  night_taken INTEGER,
+  prn_count INTEGER,         -- 発作時（頓服）の回数
+  prn_notes TEXT,            -- きっかけ・効き具合などの自由記述
+  notes TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(user_id, date)
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
   user_id TEXT PRIMARY KEY,
   messages_json TEXT NOT NULL,
