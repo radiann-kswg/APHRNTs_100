@@ -1,0 +1,6 @@
+[Unit]
+Description=APHRNTs_100 auto-deploy check (pull latest master and restart the bot if changed)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/aphrnts-100/deploy/aphrnts-100-deploy.sh

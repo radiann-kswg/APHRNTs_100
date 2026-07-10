@@ -43,6 +43,15 @@ const envSchema = z.object({
   // 複数ユーザー運用時に他ユーザーの記録・管理者の個人ログが混ざらない。
   // 空の場合は単一ユーザー運用とみなし、全記録を対象にする。
   BOT_OWNER_USER_ID: z.string().optional().default(""),
+
+  // 本番Bot（GCE VM）側のbot-digest.mdをローカルへ取得する（npm run sync:pull-remote）ための設定。
+  // 既定値は deploy/README.md に記載の本番VM構成に合わせてある。VMを再構築した場合のみ変更すること。
+  GCE_PROJECT: z.string().default("numbertales-misskey-surver"),
+  GCE_ZONE: z.string().default("asia-northeast1-a"),
+  GCE_INSTANCE: z.string().default("aphrnts-100-bot"),
+  REMOTE_BOT_DIGEST_PATH: z.string().default("/opt/aphrnts-100/logs/bot-digest.md"),
+  // gcloud CLIの実行ファイルパス（省略可・PATH上のgcloudやWindowsの既定インストール先から自動解決を試みる）
+  GCLOUD_PATH: z.string().optional().default(""),
 });
 
 export type Env = z.infer<typeof envSchema>;

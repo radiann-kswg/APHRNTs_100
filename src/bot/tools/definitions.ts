@@ -17,7 +17,7 @@ export const DISTORTION_IDS = [
 export const SAVE_CHECKIN_TOOL: ToolDefinition = {
   name: "save_checkin",
   description:
-    "センパイが保存に同意した日次チェックイン（気分・睡眠・エネルギー・創作進捗等）をSQLiteに保存する。会話の途中経過では呼び出さず、保存の同意を得た後にのみ呼び出すこと。",
+    "日次チェックイン（気分・睡眠・エネルギー・創作進捗等）をSQLiteに保存する。センパイの希望により、これは他の記録系ツールと異なり事前の保存同意確認が不要な例外項目。雑談の中で体調・気分に触れた内容であっても、そのまま呼び出して保存してよい。ただし呼び出した後は必ず「記録として残しておいたぞ」等、保存した事実をセンパイに伝えること（黙って保存しない）。",
   inputSchema: {
     type: "object",
     properties: {

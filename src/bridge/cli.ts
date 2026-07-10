@@ -1,11 +1,13 @@
 // Claude連携ブリッジの手動同期CLI。
-//   npm run sync          … 双方向同期（logs/取り込み → ダイジェスト書き出し）
-//   npm run sync:import   … Claude→Bot（logs/YYYY-MM-DD.md をSQLiteへ取り込み）
-//   npm run sync:export   … Bot→Claude（SQLite記録を logs/bot-digest.md へ書き出し）
+//   npm run sync             … 双方向同期（logs/取り込み → ダイジェスト書き出し）
+//   npm run sync:import      … Claude→Bot（logs/YYYY-MM-DD.md をSQLiteへ取り込み）
+//   npm run sync:export      … Bot→Claude（SQLite記録を logs/bot-digest.md へ書き出し）
 //   npm run sync:export -- --days=31  … ダイジェストの対象日数を一時的に上書き（月次振り返り準備等）
+//   npm run sync:pull-remote … 本番VM上のbot-digest.mdをgcloud compute ssh経由でローカルへ取得
 import { fileURLToPath } from "node:url";
 import { loadEnv } from "../config/env.js";
 import { openDatabase } from "../storage/db.js";
+import { pullRemoteDigest } from "./remote-pull.js";
 import { runExport, runImport } from "./sync.js";
 
 const mode = process.argv[2] ?? "sync";
@@ -24,12 +26,27 @@ export function parseDaysOverride(raw: string | undefined): number | undefined {
 }
 
 function main(): void {
-  if (mode !== "sync" && mode !== "import" && mode !== "export") {
-    console.error(`不明なモード: ${mode}（sync / import / export のいずれかを指定すること）`);
+  if (mode !== "sync" && mode !== "import" && mode !== "export" && mode !== "pull-remote") {
+    console.error(`不明なモード: ${mode}（sync / import / export / pull-remote のいずれかを指定すること）`);
     process.exit(1);
   }
 
   const env = loadEnv();
+
+  if (mode === "pull-remote") {
+    const result = pullRemoteDigest({
+      gceProject: env.GCE_PROJECT,
+      gceZone: env.GCE_ZONE,
+      gceInstance: env.GCE_INSTANCE,
+      remoteDigestPath: env.REMOTE_BOT_DIGEST_PATH,
+      localDigestPath: env.BOT_DIGEST_PATH,
+      gcloudPathOverride: env.GCLOUD_PATH || undefined,
+      localAppData: process.env.LOCALAPPDATA,
+    });
+    console.log(`[sync] VM→ローカル: bot-digest.md を ${result.localDigestPath} へ取得した。`);
+    return;
+  }
+
   const db = openDatabase(env.DB_PATH);
   const deps = {
     db,

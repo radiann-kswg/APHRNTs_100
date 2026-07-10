@@ -82,13 +82,28 @@ Claude (Desktop/Code)                     Misskey Bot (src/)
 ### 使い方
 
 ```bash
-npm run sync           # 双方向同期（logs/取り込み → bot-digest.md書き出し）を手動実行
-npm run sync:import    # Claude→Bot のみ（logs/*.md をSQLiteへ取り込み）
-npm run sync:export    # Bot→Claude のみ（SQLite記録を logs/bot-digest.md へ出力）
+npm run sync             # 双方向同期（logs/取り込み → bot-digest.md書き出し）を手動実行
+npm run sync:import      # Claude→Bot のみ（logs/*.md をSQLiteへ取り込み）
+npm run sync:export      # Bot→Claude のみ（SQLite記録を logs/bot-digest.md へ出力）
+npm run sync:pull-remote # 本番VM上のbot-digest.mdをローカルへ取得（下記「本番VM運用時の注意」参照）
 ```
 
 - Bot本体（`npm run dev` / `npm start`）とdev-cli（`npm run dev:cli`）では同期が自動で走るため、通常は手動実行は不要です（dev-cli内では `/sync` でも実行可能）。
-- Claude Desktop側は追加操作不要です。セッション開始時に `logs/bot-digest.md`（存在する場合）を読む運用が `CLAUDE.md` に組み込まれています。
+- Claude Desktop側は追加操作不要です。セッション開始時に `logs/bot-digest.md`（存在する場合）を読む運用が `CLAUDE.md` に組み込まれています。ただし本番Bot運用時は下記の注意を参照してください。
+
+### 本番VM運用時の注意（`npm run sync:pull-remote`）
+
+本番Bot（[deploy/README.md](./deploy/README.md)参照）はGCE VM上で単独稼働しており、VM上の`logs/bot-digest.md`・SQLite（`.cache/session.db`）はいずれもVMのローカルディスクにのみ存在します。デプロイは「GitHub→VM」のpull型一方向のみで、VM→GitHubへ書き戻す経路は存在しません。そのため、**VM上で生成されたダイジェストはローカルの`logs/bot-digest.md`とは自動では同期されません**（ローカルでの`npm run sync`は、あくまでローカルの`.cache/session.db`だけを対象にします）。
+
+Claude Desktop/Codeが最新のBot記録を読めるようにするには、ローカル側から明示的にVMのファイルを取得する必要があります。
+
+```bash
+npm run sync:pull-remote   # gcloud compute ssh 経由でVM上のbot-digest.mdを取得し、ローカルへ上書き
+```
+
+- **前提**: このPCに[gcloud CLI](https://cloud.google.com/sdk/docs/install)がインストール・認証済みで（`gcloud auth list`で本番VMのプロジェクトへアクセスできるアカウントが見えること）、かつVM上でsudo権限を持つユーザーとしてSSH接続できること（VM本体はOS Loginで認証、Bot自体は非特権ユーザー`aphrnts-bot`で稼働しているため、ダイジェストの読み取りには`sudo cat`を使う）。
+- **設定**: `.env`の`GCE_PROJECT` / `GCE_ZONE` / `GCE_INSTANCE` / `REMOTE_BOT_DIGEST_PATH`（既定値は本番VM構成に合わせ済み。VM再構築時のみ変更）。
+- **定期実行**: 常に最新化しておきたい場合は、OS側のタスクスケジューラ等でこのコマンドを定期実行するよう設定してください（Windowsの場合の設定例は[deploy/README.md](./deploy/README.md#ローカルpc側の定期取得windowsタスクスケジューラ)を参照）。Claude Desktopアプリ自体はコードを実行できないため、この定期実行はOS側の仕組みに委ねる必要があります。
 
 ### 仕様
 
@@ -101,7 +116,8 @@ npm run sync:export    # Bot→Claude のみ（SQLite記録を logs/bot-digest.m
 | 同期タイミング | Bot/dev-cli起動時、各メッセージ処理の前（import）と後（export）、および手動の `npm run sync` |
 | 設定 | `.env` の `CLAUDE_SYNC_ENABLED`（既定 `true`）／ `CLAUDE_LOGS_DIR`（既定 `logs`）／ `BOT_DIGEST_PATH`（既定 `logs/bot-digest.md`）／ `BOT_DIGEST_DAYS`（既定 `14`）／ `BOT_OWNER_USER_ID` |
 | ダイジェストの一時延長 | `npm run sync:export -- --days=31` のように実行すると、`BOT_DIGEST_DAYS`を変えずにその場限りで対象日数を上書きできる（月次振り返りの準備等） |
-| 実装 | [`src/bridge/`](./src/bridge/)（`log-importer` / `digest-exporter` / `notes-section` / `sync` / `runtime` / `cli`） |
+| VM→ローカル取得 | `npm run sync:pull-remote`（`gcloud compute ssh`経由。本番VM運用時のみ必要。上記「本番VM運用時の注意」参照） |
+| 実装 | [`src/bridge/`](./src/bridge/)（`log-importer` / `digest-exporter` / `notes-section` / `sync` / `runtime` / `cli` / `remote-pull`） |
 
 ### 複数ユーザー運用時のプライバシー（`BOT_OWNER_USER_ID`）
 
@@ -133,7 +149,7 @@ Botを自分以外のユーザーにも開放する場合は、`.env` の `BOT_O
 
 ## 開発（Misskey Bot / `src/`）
 
-`.cbt-datas/`と同じコンテンツをClaude(Anthropic API)経由で自動応答するMisskey Botのコア実装。現時点ではオフライン確認（`npm run dev:cli`）と手動起動をサポートし、本番運用ツール（PM2/systemd/GCPデプロイ等）は未実装。
+`.cbt-datas/`と同じコンテンツをClaude(Anthropic API)経由で自動応答するMisskey Botのコア実装。現時点ではオフライン確認（`npm run dev:cli`）に加え、GCE VM上でのsystemd常駐運用・`master`マージ後の自動デプロイまで対応済み（詳細は[deploy/README.md](./deploy/README.md)参照）。
 
 ```bash
 npm install

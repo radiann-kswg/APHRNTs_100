@@ -29,3 +29,4 @@ Claude Desktop・Claude.aiでは、振り返りの最後に「グラフにして
 - Claude Code・GitHub Copilot ChatはArtifact機能を持たないため、この節はClaude Desktop / Claude.aiでの振り返り時のみ提案すること。
 - 記録が少ない・数値化されていない日は無理に補完せず、「記録がある範囲だけ」を可視化する。
 - 診断・評価のためのグラフではなく、センパイ自身が傾向を眺めるための道具として提示する（[全機能共通のルール](./README.md#全機能共通のルール)参照）。
+- 具体的な抽出・生成手順（`scripts/extract-mood.mjs` での数値抽出、Chart.jsでの描画、`create_artifact`/`update_artifact` での保存・更新、空データ時の扱い）は [mood-artifact.md](./mood-artifact.md) を参照する。月次振り返りでは対象期間を30日にするだけで同じ要領で使える。

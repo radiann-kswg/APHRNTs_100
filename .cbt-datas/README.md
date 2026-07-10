@@ -16,6 +16,8 @@
 | 「良かったことを書きたい」「感謝日記をつけたい」 | [gratitude.md](./gratitude.md) |
 | 「今週を振り返りたい」「最近の傾向を知りたい」 | [weekly-reflection.md](./weekly-reflection.md) |
 | 「今月を振り返りたい」「月次で振り返りたい」 | [monthly-reflection.md](./monthly-reflection.md) |
+| 「生活記録表を書きたい」「受診に持っていくシートを埋めたい」（1日分） | [health-sheet-daily.md](./health-sheet-daily.md) |
+| 「1週間分の健康管理シートを作りたい」「週間の生活記録表を埋めたい」 | [health-sheet-weekly.md](./health-sheet-weekly.md) |
 
 センパイが何をしたいか明言していない場合は、無理に機能を勧めず、まず[AGENTS.mdの運用方針](../AGENTS.md#生活管理cbtサポートの運用方針)通り体調・気分を尋ねる会話から入り、必要そうであれば選択肢として提案してください。
 
@@ -25,7 +27,7 @@
 
 1. **診断・治療ではなく「気づきの整理」として扱うこと。** 認知の歪みの提示は「こういう見方もあるかもね」という提案にとどめ、断定・レッテル貼りをしない（[AGENTS.mdの禁止事項](../AGENTS.md#禁止事項)参照）。
 2. **一度に質問を詰め込みすぎない。** 一問一答、あるいはセンパイのペースに合わせて2〜3項目ずつ、会話として進める。
-3. **記録の保存は必ずセンパイの同意を得てから行う。** Claude Desktop/Code/Copilotで会話した内容を`logs/YYYY-MM-DD.md`へ書き込む場合は、[logs/README.md](../logs/README.md)のフォーマット（既存4見出し＋任意のCBT関連セクション）に従い、書き込む前に必ず確認する。無人稼働するMisskey Bot（`src/`実装）の場合は、会話の流れの中でセンパイが明確に「記録して」「保存して」と述べた内容のみを構造化データとして保存する。
+3. **記録の保存は必ずセンパイの同意を得てから行う（日次チェックインを除く）。** Claude Desktop/Code/Copilotで会話した内容を`logs/YYYY-MM-DD.md`へ書き込む場合は、[logs/README.md](../logs/README.md)のフォーマット（既存4見出し＋任意のCBT関連セクション）に従い、書き込む前に必ず確認する。無人稼働するMisskey Bot（`src/`実装）の場合、思考記録・行動活性化・感謝日記は、会話の流れの中でセンパイが明確に「記録して」「保存して」と述べた内容のみを構造化データとして保存する。**日次チェックイン（気分・睡眠・エネルギー・創作進捗）だけは例外とし、雑談の中で体調・気分に触れた内容であれば、事前に保存の同意を確認せずそのまま構造化データとして保存してよい**（センパイの希望により、確認の手間を省く運用）。ただし保存した際は「記録として残しておいたぞ」のように一言添え、保存した事実は必ず伝える（黙って保存しない）。
 4. **希死念慮・自傷などの緊急性の高い兆候が見られた場合は、いま案内している機能を中断し、[AGENTS.mdの安全指針](../AGENTS.md#生活管理cbtサポートの運用方針)に記載の相談窓口を最優先で案内すること。** この安全指針の文言はAGENTS.mdが正典であり、本ディレクトリ内では複製しない。
 5. **医学的診断・薬の処方に類する助言は行わない**（AGENTS.md参照）。専門的なケアが必要と判断した場合は、遠慮なく専門機関の利用を勧める。
 
@@ -40,6 +42,9 @@
 - [gratitude.md](./gratitude.md) — 「良かったこと」3行日記
 - [weekly-reflection.md](./weekly-reflection.md) — 週次振り返り
 - [monthly-reflection.md](./monthly-reflection.md) — 月次振り返り（weekly-reflection.mdの30日版、差分のみ記載）
+- [mood-artifact.md](./mood-artifact.md) — 気分推移Artifact（`気分: N/10`を折れ線グラフ化する自己完結型HTMLの生成手順・Claude Desktop / Claude.aiのみ）
+- [health-sheet-daily.md](./health-sheet-daily.md) — 健康管理シート（日間）＋CBT記入テンプレ（生活記録表の各項目＋気分N/10・思考記録・行動活性化・感謝日記。logs/README準拠）
+- [health-sheet-weekly.md](./health-sheet-weekly.md) — 健康管理シート（週間）＋CBT記入テンプレ（月〜日＋服薬・受診日・発作時・メモ＋週間サマリ・週次振り返り）
 
 ## 将来の自動化（Misskey Bot）について
 
