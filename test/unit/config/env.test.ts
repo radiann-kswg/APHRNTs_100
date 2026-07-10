@@ -11,6 +11,10 @@ describe("loadEnv", () => {
     expect(env.WEEKLY_SUMMARY_HOUR).toBe(20);
     expect(env.DAILY_REFLECTION_HOUR).toBe(20);
     expect(env.BOT_DIGEST_DAYS).toBe(14);
+    expect(env.GCE_PROJECT).toBe("numbertales-misskey-surver");
+    expect(env.GCE_ZONE).toBe("asia-northeast1-a");
+    expect(env.GCE_INSTANCE).toBe("aphrnts-100-bot");
+    expect(env.REMOTE_BOT_DIGEST_PATH).toBe("/opt/aphrnts-100/logs/bot-digest.md");
   });
 
   it("coerces numeric env vars from strings", () => {

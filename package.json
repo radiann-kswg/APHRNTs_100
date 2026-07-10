@@ -13,6 +13,7 @@
     "sync": "tsx src/bridge/cli.ts sync",
     "sync:import": "tsx src/bridge/cli.ts import",
     "sync:export": "tsx src/bridge/cli.ts export",
+    "sync:pull-remote": "tsx src/bridge/cli.ts pull-remote",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
