@@ -37,7 +37,8 @@ Windowsの場合の設定例（PowerShell、管理者権限不要）:
 
 ```powershell
 $repo = "C:\Visual Studio Code UserFile\APHRNTs_100"
-$action = New-ScheduledTaskAction -Execute "$repo\scripts\pull-bot-digest-task.cmd"
+$action = New-ScheduledTaskAction -Execute "wscript.exe" `
+  -Argument "`"$repo\scripts\run-hidden.vbs`" `"$repo\scripts\pull-bot-digest-task.cmd`""
 $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) `
   -RepetitionInterval (New-TimeSpan -Minutes 30) -RepetitionDuration ([TimeSpan]::MaxValue)
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd `
@@ -46,7 +47,7 @@ Register-ScheduledTask -TaskName "APHRNTs100-PullBotDigest" -Action $action -Tri
   -Settings $settings -Description "本番VMのlogs/bot-digest.mdをgcloud経由でローカルへ定期取得する"
 ```
 
-- 実行内容は[`scripts/pull-bot-digest-task.cmd`](../scripts/pull-bot-digest-task.cmd)（リポジトリ直下へ`cd`して`npm run sync:pull-remote`を呼ぶだけの薄いラッパー）。
+- 実行内容は[`scripts/pull-bot-digest-task.cmd`](../scripts/pull-bot-digest-task.cmd)（リポジトリ直下へ`cd`して`npm run sync:pull-remote`を呼ぶだけの薄いラッパー）を、[`scripts/run-hidden.vbs`](../scripts/run-hidden.vbs)経由で起動する。タスクスケジューラが`.cmd`を直接実行するとトリガーのたびにコマンドプロンプトの窓が表示されてしまうため、`wscript.exe`でウィンドウ非表示（`WScript.Shell.Run`のwindowstyle=0）にラップしている。
 - 出力は`logs/pull-digest.log`に追記される（`logs/`はgit管理外）。
 - 前提条件（gcloud CLIの認証・VMへのSSH+sudo権限）は[README.mdの該当箇所](../README.md#本番vm運用時の注意npm-run-syncpull-remote)を参照。
 - タスクの確認・削除: `Get-ScheduledTask -TaskName "APHRNTs100-PullBotDigest"` / `Unregister-ScheduledTask -TaskName "APHRNTs100-PullBotDigest" -Confirm:$false`。
