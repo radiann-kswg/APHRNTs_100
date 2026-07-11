@@ -13,11 +13,12 @@ export interface PipelineDeps {
   /**
    * システムプロンプト。関数を渡すとメッセージ処理のたびに評価されるため、
    * Claude連携ブリッジで取り込んだ最新のセッション記録を都度反映できる。
-   * 引数として発言ユーザーのIDとチャンネルを受け取るため、ユーザーごと・
+   * 引数として発言ユーザーのIDとチャンネル、現在時刻を受け取るため、ユーザーごと・
    * チャンネルごとに内容を変えられる（例: BOT_OWNER_USER_ID 設定時、オーナー以外には
    * logs/の記録を注入しない。misskey-chatでは一対一チャットへの移行提案が不要、等）。
+   * 現在時刻はシステムプロンプトへの日付コンテキスト注入（相対的な日付表現の解決）に使う。
    */
-  systemPrompt: string | ((userId: string, channel: Channel) => string);
+  systemPrompt: string | ((userId: string, channel: Channel, now: Date) => string);
   sessionStore: SessionStore;
   rateLimiter: RateLimiter;
   safetyIncidentStore: SafetyIncidentStore;
@@ -59,7 +60,7 @@ export function createMessagePipeline(deps: PipelineDeps): MessageHandler {
 
     const executeTool = createToolExecutor(userId, deps.toolHandlerDeps, () => now);
     const systemPrompt =
-      typeof deps.systemPrompt === "function" ? deps.systemPrompt(userId, channel) : deps.systemPrompt;
+      typeof deps.systemPrompt === "function" ? deps.systemPrompt(userId, channel, now) : deps.systemPrompt;
     const result = await deps.aiProvider.generateReply({
       systemPrompt,
       messages,

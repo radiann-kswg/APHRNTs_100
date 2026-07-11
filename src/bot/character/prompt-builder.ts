@@ -1,6 +1,19 @@
 import type { Channel } from "../pipeline.js";
+import { formatJstDateWithWeekday } from "../../utils/date.js";
 import type { PersonaContent } from "./loader.js";
 import { SAFETY_POLICY_PROMPT_JP } from "./safety-policy.js";
+
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+function buildDateContextSection(now: Date): string {
+  const today = formatJstDateWithWeekday(now);
+  const yesterday = formatJstDateWithWeekday(new Date(now.getTime() - ONE_DAY_MS));
+  return `## 現在日時（JST基準）
+
+- 今日の日付: ${today}
+- 昨日の日付: ${yesterday}
+- 「今日」「昨日」「おととい」等の相対的な日付表現は、必ず上記を基準に計算し、save_checkin・save_medication・save_gratitudeを呼び出す際はdate欄に具体的なYYYY-MM-DD形式で渡すこと。会話の文脈だけで日付を推測しないこと。`;
+}
 
 function chatNudgeNote(channel: Channel): string {
   if (channel === "misskey-chat") {
@@ -19,6 +32,7 @@ function buildBotOperatingNotes(channel: Channel): string {
 
 ${brevityNote}
 - 日次チェックイン（気分・睡眠・エネルギー・創作進捗・服薬等）は例外的に、センパイが雑談の中で体調・気分・服薬に触れたら、事前に保存の同意を確認せずそのままsave_checkin・save_medicationを呼び出して構造化データとして保存してよい（センパイの希望により確認を省く運用）。ただし保存した際は「気分の記録、残しておいたぞ」のように一言添え、保存した事実は必ず伝えること（黙って保存しない）。服薬の記録はあくまで服用の有無の把握にとどめ、薬の増減・変更の助言や指示は絶対に行わないこと。
+- センパイに「もう記録した？」等、記録済みかどうかを聞かれた場合や、前日以前の記録を遡って記録する場合は、記憶や会話の流れだけで判断せず、必ず先にget_recent_recordsを呼び出して実際の記録状況を確認してから答えること。
 - 思考記録・行動活性化・感謝日記は、センパイが明確に「記録して」「保存して」と述べた場合のみ、対応するツール（save_thought_record / save_activity / save_gratitude）を呼び出して構造化データとして保存すること。会話の途中経過だけでは保存しない。
 - ツールを呼び出した後は、保存できたことを一言ねぎらいつつ会話を続けること。
 ${chatNudgeNote(channel)}`;
@@ -34,6 +48,8 @@ export interface SystemPromptOptions {
   claudeNotesSection?: string;
   /** 発言があったチャンネル。省略時は"misskey"（メンション）として扱う */
   channel?: Channel;
+  /** 現在日時。相対的な日付表現の計算基準として注入する。省略時は new Date() */
+  now?: Date;
 }
 
 export function buildSystemPrompt(persona: PersonaContent, options: SystemPromptOptions = {}): string {
@@ -50,6 +66,8 @@ export function buildSystemPrompt(persona: PersonaContent, options: SystemPrompt
     cbtSections,
     "---",
     buildBotOperatingNotes(options.channel ?? "misskey"),
+    "---",
+    buildDateContextSection(options.now ?? new Date()),
   ];
 
   if (options.claudeNotesSection) {

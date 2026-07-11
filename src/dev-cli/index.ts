@@ -57,9 +57,9 @@ async function main(): Promise<void> {
 
   const persona = loadPersonaContent();
   const systemPrompt = bridge
-    ? (userId: string, channel: Channel) =>
-        buildSystemPrompt(persona, { claudeNotesSection: bridge.notesSectionFor(userId), channel })
-    : (_userId: string, channel: Channel) => buildSystemPrompt(persona, { channel });
+    ? (userId: string, channel: Channel, now: Date) =>
+        buildSystemPrompt(persona, { claudeNotesSection: bridge.notesSectionFor(userId), channel, now })
+    : (_userId: string, channel: Channel, now: Date) => buildSystemPrompt(persona, { channel, now });
   const aiProvider = createAIProvider(env);
 
   let handleMessage = createMessagePipeline({

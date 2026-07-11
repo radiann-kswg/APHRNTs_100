@@ -14,6 +14,21 @@ export const DISTORTION_IDS = [
   "personalization",
 ] as const;
 
+export const GET_RECENT_RECORDS_TOOL: ToolDefinition = {
+  name: "get_recent_records",
+  description:
+    "直近N日分（デフォルト3日、最大14日）のチェックイン・服薬記録について、6項目（気分・睡眠・エネルギー・創作進捗・服薬・メモ）それぞれが記録済みか未記録かを日付ごとに返す読み取り専用ツール。センパイに「もう記録した？」等と聞かれたとき、前日以前の記録を遡って確認・追記するときは、記憶や会話の流れだけで判断せず必ず先にこれを呼び出すこと。",
+  inputSchema: {
+    type: "object",
+    properties: {
+      days: { type: "integer", minimum: 1, maximum: 14, description: "遡る日数（今日を含む）。省略時は3。" },
+    },
+  },
+};
+
+const DATE_FIELD_DESCRIPTION =
+  "YYYY-MM-DD形式の日付。省略時は今日(JST)扱いになるが、システムプロンプト冒頭の『現在日時（JST基準）』を基準に「今日」「昨日」等を計算し、明示的に指定すること。";
+
 export const SAVE_CHECKIN_TOOL: ToolDefinition = {
   name: "save_checkin",
   description:
@@ -21,7 +36,7 @@ export const SAVE_CHECKIN_TOOL: ToolDefinition = {
   inputSchema: {
     type: "object",
     properties: {
-      date: { type: "string", description: "YYYY-MM-DD形式の日付" },
+      date: { type: "string", description: DATE_FIELD_DESCRIPTION },
       mood: { type: "integer", minimum: 1, maximum: 10 },
       sleepHours: { type: "number" },
       sleepQuality: { type: "integer", minimum: 1, maximum: 5 },
@@ -40,7 +55,7 @@ export const SAVE_MEDICATION_TOOL: ToolDefinition = {
   inputSchema: {
     type: "object",
     properties: {
-      date: { type: "string", description: "YYYY-MM-DD形式の日付" },
+      date: { type: "string", description: DATE_FIELD_DESCRIPTION },
       morningTaken: { type: "boolean" },
       middayTaken: { type: "boolean" },
       afterMealTaken: { type: "boolean" },
@@ -80,7 +95,7 @@ export const SAVE_GRATITUDE_TOOL: ToolDefinition = {
   inputSchema: {
     type: "object",
     properties: {
-      date: { type: "string", description: "YYYY-MM-DD形式の日付" },
+      date: { type: "string", description: DATE_FIELD_DESCRIPTION },
       item1: { type: "string" },
       item2: { type: "string" },
       item3: { type: "string" },
@@ -107,6 +122,7 @@ export const SAVE_ACTIVITY_TOOL: ToolDefinition = {
 };
 
 export const ALL_TOOLS: ToolDefinition[] = [
+  GET_RECENT_RECORDS_TOOL,
   SAVE_CHECKIN_TOOL,
   SAVE_MEDICATION_TOOL,
   SAVE_THOUGHT_RECORD_TOOL,
