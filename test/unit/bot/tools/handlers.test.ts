@@ -38,6 +38,20 @@ describe("createToolExecutor", () => {
     expect(rows[0]?.mood).toBe(7);
   });
 
+  it("save_checkin defaults the omitted date to today in JST, not UTC", async () => {
+    // UTC 2026-07-11T20:00:00Z is already 2026-07-12 in JST (early morning) — this
+    // reproduces the reported bug where a late-night/early-morning save landed on the wrong day.
+    const jstBoundaryExecuteTool = createToolExecutor(
+      "user1",
+      { checkinStore, thoughtRecordStore, gratitudeStore, activationStore, medicationStore },
+      () => new Date("2026-07-11T20:00:00Z"),
+    );
+    await jstBoundaryExecuteTool("save_checkin", { mood: 5 });
+    const rows = checkinStore.listSince("user1", "2026-07-01");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.date).toBe("2026-07-12");
+  });
+
   it("save_medication persists a row with tri-state slots", async () => {
     await executeTool("save_medication", { date: "2026-01-01", morningTaken: true, nightTaken: false });
     const rows = medicationStore.listSince("user1", "2026-01-01");
@@ -73,6 +87,38 @@ describe("createToolExecutor", () => {
   it("save_activity handles a missing activity gracefully", async () => {
     const result = await executeTool("save_activity", {});
     expect(result).toContain("読み取れなかった");
+  });
+
+  it("get_recent_records reports missing vs present fields across a mix of recorded and unrecorded days", async () => {
+    // now() is fixed to 2026-01-01T00:00:00Z in beforeEach, which is 2026-01-01 in JST.
+    checkinStore.upsert({
+      userId: "user1",
+      date: "2026-01-01",
+      mood: 8,
+      sleepHours: 7,
+      sleepQuality: 4,
+      energy: 6,
+      creativeProgress: "書けた",
+      notes: "調子いい",
+    });
+    medicationStore.upsert({ userId: "user1", date: "2026-01-01", morningTaken: true });
+
+    checkinStore.upsert({ userId: "user1", date: "2025-12-31", mood: 5 });
+    // 2025-12-30: nothing recorded at all.
+
+    const result = await executeTool("get_recent_records", { days: 3 });
+
+    expect(result).toContain("2025-12-30: 記録なし（全項目未記録）");
+    expect(result).toContain("2025-12-31: 気分○ 睡眠✕ エネルギー✕ 創作✕ 服薬✕ メモ✕");
+    expect(result).toContain("2026-01-01: 気分○ 睡眠○ エネルギー○ 創作○ 服薬○ メモ○");
+  });
+
+  it("get_recent_records clamps the days parameter to [1, 14]", async () => {
+    const tooMany = await executeTool("get_recent_records", { days: 100 });
+    expect(tooMany.split("\n")).toHaveLength(15); // header + 14 date lines
+
+    const tooFew = await executeTool("get_recent_records", { days: 0 });
+    expect(tooFew.split("\n")).toHaveLength(2); // header + 1 date line
   });
 
   it("returns a message for unknown tools", async () => {

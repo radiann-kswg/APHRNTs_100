@@ -60,4 +60,49 @@ describe("pipeline with tool use", () => {
     expect(history).toHaveLength(2);
     expect(history[1]).toEqual({ role: "assistant", content: result.replyText });
   });
+
+  it("checks recent record gaps via get_recent_records, then retroactively saves yesterday's checkin", async () => {
+    const db = openDatabase(":memory:");
+    const sessionStore = new SessionStore(db);
+    const checkinStore = new CheckinStore(db);
+    const thoughtRecordStore = new ThoughtRecordStore(db);
+    const gratitudeStore = new GratitudeStore(db);
+    const activationStore = new BehavioralActivationStore(db);
+    const medicationStore = new MedicationStore(db);
+    const rateLimitStore = new RateLimitStore(db);
+    const safetyIncidentStore = new SafetyIncidentStore(db);
+    const rateLimiter = new RateLimiter(rateLimitStore, 0, 100);
+
+    const aiProvider = scriptedProvider(async ({ executeTool }) => {
+      const gapCheck = await executeTool("get_recent_records", { days: 2 });
+      const toolResult = await executeTool("save_checkin", { date: "2025-12-31", mood: 6 });
+      return {
+        text: `昨日(2025-12-31)分を記録したぞ: ${toolResult}`,
+        toolInvocations: [
+          { name: "get_recent_records", input: { days: 2 }, result: gapCheck },
+          { name: "save_checkin", input: { date: "2025-12-31", mood: 6 }, result: toolResult },
+        ],
+      };
+    });
+
+    const handleMessage = createMessagePipeline({
+      aiProvider,
+      systemPrompt: "test",
+      sessionStore,
+      rateLimiter,
+      safetyIncidentStore,
+      toolHandlerDeps: { checkinStore, thoughtRecordStore, gratitudeStore, activationStore, medicationStore },
+      now: () => new Date("2026-01-01T10:00:00Z"),
+    });
+
+    const result = await handleMessage("user1", "昨日の気分は6だったの、記録し忘れてた", "cli");
+
+    expect(result.suppressed).toBe(false);
+    expect(result.replyText).toContain("2025-12-31");
+
+    const rows = checkinStore.listSince("user1", "2025-12-31");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.date).toBe("2025-12-31");
+    expect(rows[0]?.mood).toBe(6);
+  });
 });

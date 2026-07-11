@@ -51,4 +51,24 @@ describe("buildSystemPrompt", () => {
     expect(prompt).not.toContain("一対一メッセージで続けよう");
     expect(prompt).toContain("既に一対一のチャット");
   });
+
+  it("includes today's and yesterday's JST date with weekday when now is provided", () => {
+    // UTC 2026-07-11T20:00:00Z is 2026-07-12 in JST.
+    const prompt = buildSystemPrompt(
+      { roleplayPrompt: "R", cbtDatas: [] },
+      { now: new Date("2026-07-11T20:00:00Z") },
+    );
+    expect(prompt).toContain("現在日時（JST基準）");
+    expect(prompt).toContain("2026-07-12");
+    expect(prompt).toContain("2026-07-11");
+  });
+
+  it("instructs the model to call get_recent_records before answering what's recorded", () => {
+    const prompt = buildSystemPrompt({ roleplayPrompt: "R", cbtDatas: [] });
+    expect(prompt).toContain("get_recent_records");
+  });
+
+  it("does not throw when now is omitted", () => {
+    expect(() => buildSystemPrompt({ roleplayPrompt: "R", cbtDatas: [] })).not.toThrow();
+  });
 });

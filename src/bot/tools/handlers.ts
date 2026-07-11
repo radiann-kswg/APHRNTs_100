@@ -1,8 +1,9 @@
 import type { BehavioralActivationStore } from "../../storage/behavioral-activation-store.js";
-import type { CheckinStore } from "../../storage/checkin-store.js";
+import type { CheckinRow, CheckinStore } from "../../storage/checkin-store.js";
 import type { GratitudeStore } from "../../storage/gratitude-store.js";
-import type { MedicationStore } from "../../storage/medication-store.js";
+import type { MedicationRow, MedicationStore } from "../../storage/medication-store.js";
 import type { ThoughtRecordStore } from "../../storage/thought-record-store.js";
+import { shiftJstDateString, toJstDateString } from "../../utils/date.js";
 
 export interface ToolHandlerDeps {
   checkinStore: CheckinStore;
@@ -25,7 +26,56 @@ function booleanOrUndefined(value: unknown): boolean | undefined {
 }
 
 function todayIso(now: Date): string {
-  return now.toISOString().slice(0, 10);
+  return toJstDateString(now);
+}
+
+function clampRecentDays(value: number | undefined): number {
+  const days = value === undefined ? 3 : Math.trunc(value);
+  return Math.min(14, Math.max(1, days));
+}
+
+function formatRecentRecordsSummary(
+  sinceDate: string,
+  todayJst: string,
+  days: number,
+  checkinRows: CheckinRow[],
+  medicationRows: MedicationRow[],
+): string {
+  const checkinByDate = new Map(checkinRows.map((row) => [row.date, row]));
+  const medicationByDate = new Map(medicationRows.map((row) => [row.date, row]));
+
+  const lines = [`直近${days}日間（${sinceDate}〜${todayJst}, JST）の記録状況:`];
+  for (let i = 0; i < days; i++) {
+    const date = shiftJstDateString(sinceDate, i);
+    const checkin = checkinByDate.get(date);
+    const medication = medicationByDate.get(date);
+
+    if (!checkin && !medication) {
+      lines.push(`${date}: 記録なし（全項目未記録）`);
+      continue;
+    }
+
+    const medicationRecorded =
+      medication != null &&
+      (medication.morning_taken != null ||
+        medication.midday_taken != null ||
+        medication.after_meal_taken != null ||
+        medication.night_taken != null ||
+        medication.prn_count != null);
+
+    lines.push(
+      [
+        `${date}:`,
+        `気分${checkin?.mood != null ? "○" : "✕"}`,
+        `睡眠${checkin?.sleep_hours != null || checkin?.sleep_quality != null ? "○" : "✕"}`,
+        `エネルギー${checkin?.energy != null ? "○" : "✕"}`,
+        `創作${checkin?.creative_progress != null ? "○" : "✕"}`,
+        `服薬${medicationRecorded ? "○" : "✕"}`,
+        `メモ${checkin?.notes != null ? "○" : "✕"}`,
+      ].join(" "),
+    );
+  }
+  return lines.join("\n");
 }
 
 export function createToolExecutor(
@@ -35,6 +85,15 @@ export function createToolExecutor(
 ): (name: string, input: Record<string, unknown>) => Promise<string> {
   return async function executeTool(name: string, input: Record<string, unknown>): Promise<string> {
     switch (name) {
+      case "get_recent_records": {
+        const days = clampRecentDays(numberOrUndefined(input.days));
+        const today = toJstDateString(now());
+        const sinceDate = shiftJstDateString(today, -(days - 1));
+        const checkinRows = deps.checkinStore.listSince(userId, sinceDate);
+        const medicationRows = deps.medicationStore.listSince(userId, sinceDate);
+        return formatRecentRecordsSummary(sinceDate, today, days, checkinRows, medicationRows);
+      }
+
       case "save_checkin": {
         const row = deps.checkinStore.upsert(
           {
