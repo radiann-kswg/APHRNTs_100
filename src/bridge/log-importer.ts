@@ -5,6 +5,15 @@ import type { ClaudeNotesStore } from "../storage/claude-notes-store.js";
 /** logs/ 配下でClaudeのセッション記録として扱うファイル名（YYYY-MM-DD.md のみ） */
 const LOG_FILE_PATTERN = /^(\d{4}-\d{2}-\d{2})\.md$/;
 
+/**
+ * ファイル名がClaudeのセッション記録（YYYY-MM-DD.md）であればその日付を返す。
+ * 対象外（README.md・bot-digest.md・weekly-YYYY-MM-DD.md 等）なら undefined。
+ * 取り込み（本ファイル）と本番VMへの転送（remote-push）で対象範囲を揃えるために共有する。
+ */
+export function claudeLogDate(filename: string): string | undefined {
+  return LOG_FILE_PATTERN.exec(filename)?.[1];
+}
+
 export interface ImportResult {
   /** 取り込んだ（新規または上書きした）ファイル数 */
   imported: number;
@@ -32,7 +41,7 @@ export function importClaudeLogs(
 
   const filenames = readdirSync(logsDir).filter((name) => name.endsWith(".md")).sort();
   for (const filename of filenames) {
-    const date = LOG_FILE_PATTERN.exec(filename)?.[1];
+    const date = claudeLogDate(filename);
     if (!date) {
       result.skipped += 1;
       continue;

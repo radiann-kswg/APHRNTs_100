@@ -2,31 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { pullRemoteDigest, resolveGcloudPath } from "../../../src/bridge/remote-pull.js";
-
-describe("resolveGcloudPath", () => {
-  it("returns the first candidate whose --version probe succeeds", () => {
-    const exec = vi.fn().mockReturnValue({ status: 0, error: undefined } as never);
-    const path = resolveGcloudPath({ gcloudPathOverride: "C:/tools/gcloud.cmd", exec });
-    expect(path).toBe("C:/tools/gcloud.cmd");
-    expect(exec).toHaveBeenCalledTimes(1);
-  });
-
-  it("falls back to the Windows default install path when PATH lookup fails", () => {
-    const exec = vi
-      .fn()
-      .mockReturnValueOnce({ status: 1, error: new Error("not found") } as never)
-      .mockReturnValueOnce({ status: 0, error: undefined } as never);
-    const localAppData = "C:/Users/test/AppData/Local";
-    const path = resolveGcloudPath({ localAppData, exec });
-    expect(path).toBe(join(localAppData, "Google", "Cloud SDK", "google-cloud-sdk", "bin", "gcloud.cmd"));
-  });
-
-  it("throws when no candidate is executable", () => {
-    const exec = vi.fn().mockReturnValue({ status: 1, error: new Error("not found") } as never);
-    expect(() => resolveGcloudPath({ exec })).toThrow("gcloud CLIが見つからない");
-  });
-});
+import { pullRemoteDigest } from "../../../src/bridge/remote-pull.js";
 
 describe("pullRemoteDigest", () => {
   const tmpDirs: string[] = [];

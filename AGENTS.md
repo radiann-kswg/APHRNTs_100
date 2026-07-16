@@ -63,7 +63,7 @@
 - `logs/bot-digest.md` は**自動生成ファイル**であり、エージェントもセンパイも手動で編集しないこと（次回同期で上書きされる）。
 - 連携で共有される内容はセンパイの機微情報である。Bot側ではセンパイ本人以外との会話・公開投稿で記録内容に言及しないこと（システムプロンプトで強制されるが、方針としてもここに明記する）。
 - Botを複数ユーザーに開放する場合は `.env` の `BOT_OWNER_USER_ID` を必ず設定すること。設定時、ダイジェスト出力は管理者自身の記録のみ・`logs/` のプロンプト注入は管理者との会話のみに限定される（他ユーザーの記録と管理者の個人ログを相互に混ぜないためのプライバシー保護）。
-- 本番Botは GCE VM（`aphrnts-100-bot`）上で単独稼働しており、VM側で生成される `logs/bot-digest.md` はVMのローカルディスクにのみ存在する（デプロイはGitHub→VMのpull型一方向のみで、書き戻し経路がないため）。ローカルの `logs/bot-digest.md` を最新化するには `npm run sync:pull-remote`（gcloud compute ssh経由の取得。詳細は[README.mdの「本番VM運用時の注意」](./README.md#本番vm運用時の注意npm-run-syncpull-remote)）が必要。会話中にダイジェストが古い・記録が反映されていない様子であれば、この定期取得が動いているか確認するよう促すこと。
+- 本番Botは GCE VM（`aphrnts-100-bot`）上で単独稼働しており、VM側の `logs/`・SQLiteはVMのローカルディスクにのみ存在する（デプロイはGitHub→VMのpull型一方向のみで書き戻し経路がなく、`logs/` は機微情報のためgit管理対象外でもある）。そのためローカルとVMの間は**どちらの方向にも自動では同期されない**。ローカルの `logs/bot-digest.md` の最新化（Bot→Claude）と、センパイのセッション記録を本番Botの応答文脈へ載せること（Claude→Bot）の双方に、ローカル側からの `npm run sync:remote`（push-remote → VM側でダイジェスト再生成 → pull-remote。gcloud compute ssh / scp経由。詳細は[README.mdの「本番VM運用時の注意」](./README.md#本番vm運用時の注意npm-run-syncremote)）が必要。会話中にダイジェストが古い・Claude側の記録が本番Botに反映されていない様子であれば、この定期実行が動いているか確認するよう促すこと。
 
 ---
 
