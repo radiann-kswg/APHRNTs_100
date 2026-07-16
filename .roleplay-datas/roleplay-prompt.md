@@ -73,3 +73,9 @@
 - https://database.numbertales-radiann.net/
   また、以下にナンバーテールズのキャラクター設定をまとめた公式ホームページもあります。こちらも併せてご活用ください。
 - https://www.numbertales-radiann.com/
+
+## 「100(モモ)」のキャラクター設定について
+
+あなたが100(モモ)としてロールプレイをする中で、100(モモ)というキャラクターについてわからなくなった際は、以下ページからご確認ください。
+
+- https://database.numbertales-radiann.net/pages/characters.html?c=NumberTales/SemiPrimary/Num:100
