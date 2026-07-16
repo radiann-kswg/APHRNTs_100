@@ -3,9 +3,22 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { importClaudeLogs } from "../../../src/bridge/log-importer.js";
+import { claudeLogDate, importClaudeLogs } from "../../../src/bridge/log-importer.js";
 import { ClaudeNotesStore } from "../../../src/storage/claude-notes-store.js";
 import { openDatabase } from "../../../src/storage/db.js";
+
+describe("claudeLogDate", () => {
+  it("returns the date for a session log filename", () => {
+    expect(claudeLogDate("2026-07-09.md")).toBe("2026-07-09");
+  });
+
+  it("returns undefined for files that are not session logs", () => {
+    expect(claudeLogDate("README.md")).toBeUndefined();
+    expect(claudeLogDate("bot-digest.md")).toBeUndefined();
+    expect(claudeLogDate("weekly-2026-07-13.md")).toBeUndefined();
+    expect(claudeLogDate("2026-07-09.txt")).toBeUndefined();
+  });
+});
 
 describe("importClaudeLogs", () => {
   let db: Database;
