@@ -6,6 +6,10 @@ export interface HeartbeatState {
   lastConnectedAt: string | null;
   lastDisconnectedAt: string | null;
   startedAt: string;
+  /** プロセス起動後にWS再接続が成立した回数（累計） */
+  reconnectCount: number;
+  /** 直近1時間のWS切断回数。watchdogが「切れては繋ぎ直し」の頻発（churn）を検知するために使う */
+  disconnectsLastHour: number;
 }
 
 export interface HeartbeatWriter {
@@ -28,6 +32,8 @@ export function createHeartbeatWriter(
       wsConnected: state.wsConnected,
       lastConnectedAt: state.lastConnectedAt,
       lastDisconnectedAt: state.lastDisconnectedAt,
+      reconnectCount: state.reconnectCount,
+      disconnectsLastHour: state.disconnectsLastHour,
       uptimeSec: Math.floor((Date.now() - new Date(state.startedAt).getTime()) / 1000),
     };
     writeFileSync(path, JSON.stringify(payload, null, 2));
