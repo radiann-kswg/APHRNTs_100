@@ -32,12 +32,12 @@ const DATE_FIELD_DESCRIPTION =
 export const SAVE_CHECKIN_TOOL: ToolDefinition = {
   name: "save_checkin",
   description:
-    "日次チェックイン（気分・睡眠・エネルギー・創作進捗等）をSQLiteに保存する。センパイの希望により、これは他の記録系ツールと異なり事前の保存同意確認が不要な例外項目。雑談の中で体調・気分に触れた内容であっても、そのまま呼び出して保存してよい。ただし呼び出した後は必ず「記録として残しておいたぞ」等、保存した事実をセンパイに伝えること（黙って保存しない）。",
+    "日次チェックイン（気分・睡眠・エネルギー・創作進捗等）をSQLiteに保存する。センパイの希望により、これは他の記録系ツールと異なり事前の保存同意確認が不要な例外項目。雑談の中で体調・気分に触れた内容であっても、そのまま呼び出して保存してよい。ただし呼び出した後は必ず「記録として残しておいたぞ」等、保存した事実をセンパイに伝えること（黙って保存しない）。moodは『一日の総括値』として扱うこと。『今つらい』『朝は7だった』のような特定時点の気分は save_mood_event で記録し、総括のmoodと混同しない（瞬間的な落ち込みを一日の気分として上書きしない）。",
   inputSchema: {
     type: "object",
     properties: {
       date: { type: "string", description: DATE_FIELD_DESCRIPTION },
-      mood: { type: "integer", minimum: 1, maximum: 10 },
+      mood: { type: "integer", minimum: 1, maximum: 10, description: "一日の総括の気分。特定時点の気分はsave_mood_eventを使う" },
       sleepHours: { type: "number" },
       sleepQuality: { type: "integer", minimum: 1, maximum: 5 },
       energy: { type: "integer", minimum: 1, maximum: 10 },
@@ -48,10 +48,29 @@ export const SAVE_CHECKIN_TOOL: ToolDefinition = {
   },
 };
 
+export const SAVE_MOOD_EVENT_TOOL: ToolDefinition = {
+  name: "save_mood_event",
+  description:
+    "特定時点の気分（瞬間値）を時点ラベル付きでSQLiteに保存する。『今つらい、気分3くらい』『朝は7だった』のように、一日の総括ではなくその時点の気分が語られたときに使う。日次チェックインと同様、事前の保存同意確認が不要な例外項目だが、保存したら必ずその事実をセンパイに伝えること。一日の中で複数回呼んでよく、これにより気分の推移（浮き沈み）が記録される。一日の総括の気分はsave_checkinのmoodで別途保存する。",
+  inputSchema: {
+    type: "object",
+    properties: {
+      date: { type: "string", description: DATE_FIELD_DESCRIPTION },
+      timepoint: {
+        type: "string",
+        description: "時点ラベル。「朝」「昼」「夕方」「夜」または「HH:MM」。会話の文脈から判断して付けること",
+      },
+      mood: { type: "integer", minimum: 1, maximum: 10, description: "その時点の気分" },
+      note: { type: "string", description: "状況の補足（任意）" },
+    },
+    required: ["date", "mood"],
+  },
+};
+
 export const SAVE_MEDICATION_TOOL: ToolDefinition = {
   name: "save_medication",
   description:
-    "服薬状況（朝・日中・食後・夜の服用有無、頓服〈発作時〉の回数・状況）をSQLiteに保存する。日次チェックインと同様、センパイの希望により事前の保存同意確認が不要な例外項目。雑談の中で服薬に触れた内容であっても、そのまま呼び出して保存してよい。ただし呼び出した後は必ず保存した事実をセンパイに伝えること（黙って保存しない）。薬の増減・変更の助言や指示は絶対に含めないこと（服用の有無を記録することに徹する）。",
+    "服薬状況（朝・日中・食後・夜の服用有無、顬服〈発作時〉の回数・状況）をSQLiteに保存する。日次チェックインと同様、センパイの希望により事前の保存同意確認が不要な例外項目。雑談の中で服薬に触れた内容であっても、そのまま呼び出して保存してよい。ただし呼び出した後は必ず保存した事実をセンパイに伝えること（黙って保存しない）。薬の増減・変更の助言や指示は絶対に含めないこと（服用の有無を記録することに徹する）。",
   inputSchema: {
     type: "object",
     properties: {
@@ -124,6 +143,7 @@ export const SAVE_ACTIVITY_TOOL: ToolDefinition = {
 export const ALL_TOOLS: ToolDefinition[] = [
   GET_RECENT_RECORDS_TOOL,
   SAVE_CHECKIN_TOOL,
+  SAVE_MOOD_EVENT_TOOL,
   SAVE_MEDICATION_TOOL,
   SAVE_THOUGHT_RECORD_TOOL,
   SAVE_GRATITUDE_TOOL,

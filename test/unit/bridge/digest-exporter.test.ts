@@ -6,6 +6,7 @@ import { CheckinStore } from "../../../src/storage/checkin-store.js";
 import { openDatabase } from "../../../src/storage/db.js";
 import { GratitudeStore } from "../../../src/storage/gratitude-store.js";
 import { MedicationStore } from "../../../src/storage/medication-store.js";
+import { MoodEventStore } from "../../../src/storage/mood-event-store.js";
 import { ThoughtRecordStore } from "../../../src/storage/thought-record-store.js";
 
 const NOW = new Date("2026-07-09T12:00:00.000Z");
@@ -59,7 +60,7 @@ describe("buildBotDigest", () => {
     expect(digest).toContain("晴れた ／ 作業が進んだ ／ よく眠れた");
     expect(digest).toContain("## 服薬記録");
     expect(digest).toContain("朝済／日中—／食後—／夜未");
-    expect(digest).toContain("頓服1回（頭痛時）");
+    expect(digest).toContain("顬服1回（頭痛時）");
   });
 
   it("excludes records older than the requested period", () => {
@@ -90,5 +91,72 @@ describe("buildBotDigest", () => {
 
     expect(digest).toContain("メモ: A");
     expect(digest).toContain("メモ: B");
+  });
+  it("renders sleep quality on the 5-point Health Sheet scale", () => {
+    new CheckinStore(db).upsert({ userId: "u1", date: "2026-07-08", sleepHours: 7.5, sleepQuality: 4 }, NOW);
+    const digest = buildBotDigest(db, { days: 14, now: NOW });
+    expect(digest).toContain("質 4/5");
+    expect(digest).not.toContain("質 4/10");
+  });
+
+  it("includes mood event timelines next to the daily summary mood", () => {
+    new CheckinStore(db).upsert({ userId: "u1", date: "2026-07-08", mood: 6 }, NOW);
+    const moodStore = new MoodEventStore(db);
+    moodStore.create({ userId: "u1", date: "2026-07-08", timepoint: "朝", mood: 7, recordedAt: "2026-07-07T22:00:00.000Z" }, NOW);
+    moodStore.create({ userId: "u1", date: "2026-07-08", timepoint: "夜", mood: 3, recordedAt: "2026-07-08T10:00:00.000Z" }, NOW);
+    // 総括（checkin）が無い日の時点記録は「総括未記入」として推移だけを示す
+    moodStore.create({ userId: "u1", date: "2026-07-09", timepoint: "朝", mood: 5, recordedAt: "2026-07-08T22:00:00.000Z" }, NOW);
+
+    const digest = buildBotDigest(db, { days: 14, now: NOW });
+
+    expect(digest).toContain("気分 6/10（推移: 朝7→夜3）");
+    expect(digest).toContain("- 2026-07-09: 気分 —（総括未記入・推移: 朝5）");
+  });
+
+  it("lists days with missing checkin/medication fields in the gap section", () => {
+    // NOW = 2026-07-09T12:00:00Z → JSTでは2026-07-09。days=2 の対象は 07-08 と 07-09
+    new CheckinStore(db).upsert(
+      { userId: "u1", date: "2026-07-09", mood: 7, sleepHours: 7, sleepQuality: 4, energy: 6 },
+      NOW,
+    );
+    new MedicationStore(db).upsert(
+      { userId: "u1", date: "2026-07-09", morningTaken: true, middayTaken: true, afterMealTaken: true, nightTaken: false },
+      NOW,
+    );
+
+    const digest = buildBotDigest(db, { days: 2, now: NOW });
+
+    expect(digest).toContain("## 記録の抜け（未記入の項目）");
+    const gapSection = digest.slice(digest.indexOf("## 記録の抜け"));
+    expect(gapSection).toContain("- 2026-07-08: 気分・睡眠・活力・服薬 が未記入");
+    // 07-09は全項目記録済み（nightTaken=falseは「未服用と報告済み」であって未記入ではない）
+    expect(gapSection).not.toContain("- 2026-07-09:");
+  });
+
+  it("reports partially missing medication slots", () => {
+    new CheckinStore(db).upsert(
+      { userId: "u1", date: "2026-07-09", mood: 7, sleepHours: 7, sleepQuality: 4, energy: 6 },
+      NOW,
+    );
+    new MedicationStore(db).upsert({ userId: "u1", date: "2026-07-09", morningTaken: true }, NOW);
+
+    const digest = buildBotDigest(db, { days: 1, now: NOW });
+
+    expect(digest).toContain("- 2026-07-09: 服薬（日中/食後/夜） が未記入");
+  });
+
+  it("reports no gaps when everything in the period is recorded", () => {
+    new CheckinStore(db).upsert(
+      { userId: "u1", date: "2026-07-09", mood: 7, sleepHours: 7, sleepQuality: 4, energy: 6 },
+      NOW,
+    );
+    new MedicationStore(db).upsert(
+      { userId: "u1", date: "2026-07-09", morningTaken: true, middayTaken: true, afterMealTaken: true, nightTaken: true },
+      NOW,
+    );
+
+    const digest = buildBotDigest(db, { days: 1, now: NOW });
+
+    expect(digest).toContain("- 対象期間内に未記入の項目はない。");
   });
 });

@@ -4,6 +4,7 @@ import { createMentionHandler } from "./bot/handlers/mention.js";
 import { loadPersonaContent } from "./bot/character/loader.js";
 import { buildSystemPrompt } from "./bot/character/prompt-builder.js";
 import { createMessagePipeline, type Channel } from "./bot/pipeline.js";
+import { createReplayRunner } from "./bot/replay.js";
 import { createBridgeRuntime } from "./bridge/runtime.js";
 import { RateLimiter } from "./bot/ratelimit/index.js";
 import { loadEnv } from "./config/env.js";
@@ -17,6 +18,7 @@ import { CheckinStore } from "./storage/checkin-store.js";
 import { openDatabase } from "./storage/db.js";
 import { GratitudeStore } from "./storage/gratitude-store.js";
 import { MedicationStore } from "./storage/medication-store.js";
+import { MoodEventStore } from "./storage/mood-event-store.js";
 import { RateLimitStore } from "./storage/rate-limit-store.js";
 import { SafetyIncidentStore } from "./storage/safety-incident-store.js";
 import { SessionStore } from "./storage/session-store.js";
@@ -36,6 +38,7 @@ async function main(): Promise<void> {
   const gratitudeStore = new GratitudeStore(db);
   const activationStore = new BehavioralActivationStore(db);
   const medicationStore = new MedicationStore(db);
+  const moodEventStore = new MoodEventStore(db);
   const rateLimitStore = new RateLimitStore(db);
   const safetyIncidentStore = new SafetyIncidentStore(db);
   const botStateStore = new BotStateStore(db);
@@ -76,7 +79,7 @@ async function main(): Promise<void> {
     sessionStore,
     rateLimiter,
     safetyIncidentStore,
-    toolHandlerDeps: { checkinStore, thoughtRecordStore, gratitudeStore, activationStore, medicationStore },
+    toolHandlerDeps: { checkinStore, thoughtRecordStore, gratitudeStore, activationStore, medicationStore, moodEventStore },
     now: () => new Date(),
   });
   if (bridge) {
@@ -96,27 +99,82 @@ async function main(): Promise<void> {
   const misskeyClient = new MisskeyClient({ host: env.MISSKEY_HOST, token: env.MISSKEY_TOKEN });
   const onMention = createMentionHandler(handleMessage, misskeyClient);
   const onChatMessage = createChatHandler(handleMessage, misskeyClient);
+
+  // WS切断中に届いたメッセージの取りこぼし回収（replay）。再接続・起動時にREST APIで遡って処理する
+  const replay = createReplayRunner({
+    source: misskeyClient,
+    stateStore: botStateStore,
+    ownerUserId: env.BOT_OWNER_USER_ID,
+    onMention,
+    onChatMessage,
+  });
+  // 接続確立の直後はチャンネル購読が安定していないことがあるため、少し置いてからreplayする
+  const REPLAY_DELAY_MS = 3000;
+  let replayTimer: NodeJS.Timeout | null = null;
+  function scheduleReplay(): void {
+    if (replayTimer) clearTimeout(replayTimer);
+    replayTimer = setTimeout(() => {
+      replayTimer = null;
+      replay
+        .runReplay()
+        .then((result) => {
+          if (result.mentions > 0 || result.chats > 0) {
+            logger.info(
+              `切断中に届いていたメッセージを回収した（メンション${result.mentions}件・チャット${result.chats}件）。`,
+            );
+          }
+        })
+        .catch((error: unknown) => {
+          logger.warn("取りこぼし回収（replay）に失敗した。次回の再接続時に再試行する", error);
+        });
+    }, REPLAY_DELAY_MS);
+  }
+
   let wsConnected = false;
   let lastConnectedAt: string | null = null;
   let lastDisconnectedAt: string | null = null;
+  let reconnectCount = 0;
+  // 直近1時間の切断時刻（churn検知用）。heartbeat経由でwatchdogに渡す
+  const HOUR_MS = 60 * 60 * 1000;
+  const disconnectTimesMs: number[] = [];
+  function countDisconnectsLastHour(nowMs: number): number {
+    while (disconnectTimesMs.length > 0 && nowMs - (disconnectTimesMs[0] ?? 0) > HOUR_MS) {
+      disconnectTimesMs.shift();
+    }
+    return disconnectTimesMs.length;
+  }
 
   misskeyClient.connect(
     (note) => {
-      onMention(note).catch((error: unknown) => {
-        logger.error("mention処理でエラーが発生した", error);
-      });
+      onMention(note)
+        .then(() => {
+          replay.markMentionProcessed(note.id);
+        })
+        .catch((error: unknown) => {
+          logger.error("mention処理でエラーが発生した", error);
+        });
     },
     (message) => {
-      onChatMessage(message).catch((error: unknown) => {
-        logger.error("一対一チャット処理でエラーが発生した", error);
-      });
+      onChatMessage(message)
+        .then(() => {
+          replay.markChatProcessed(message.id);
+        })
+        .catch((error: unknown) => {
+          logger.error("一対一チャット処理でエラーが発生した", error);
+        });
     },
     (connected) => {
       wsConnected = connected;
       if (connected) {
+        if (lastDisconnectedAt !== null) {
+          reconnectCount += 1;
+        }
         lastConnectedAt = new Date().toISOString();
+        // 初回接続時はベースライン記録のみ・再接続時は切断中ぶんの回収（詳細はsrc/bot/replay.ts）
+        scheduleReplay();
       } else {
         lastDisconnectedAt = new Date().toISOString();
+        disconnectTimesMs.push(Date.now());
       }
     },
   );
@@ -127,6 +185,8 @@ async function main(): Promise<void> {
     lastConnectedAt,
     lastDisconnectedAt,
     startedAt,
+    reconnectCount,
+    disconnectsLastHour: countDisconnectsLastHour(Date.now()),
   }));
   heartbeat.start();
 
@@ -162,6 +222,7 @@ async function main(): Promise<void> {
 
   function shutdown(): void {
     logger.info("シャットダウン処理を開始する。");
+    if (replayTimer) clearTimeout(replayTimer);
     scheduler.stop();
     heartbeat.stop();
     misskeyClient.disconnect();

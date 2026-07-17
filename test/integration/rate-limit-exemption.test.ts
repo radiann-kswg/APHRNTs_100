@@ -7,6 +7,7 @@ import { CheckinStore } from "../../src/storage/checkin-store.js";
 import { openDatabase } from "../../src/storage/db.js";
 import { GratitudeStore } from "../../src/storage/gratitude-store.js";
 import { MedicationStore } from "../../src/storage/medication-store.js";
+import { MoodEventStore } from "../../src/storage/mood-event-store.js";
 import { RateLimitStore } from "../../src/storage/rate-limit-store.js";
 import { SafetyIncidentStore } from "../../src/storage/safety-incident-store.js";
 import { SessionStore } from "../../src/storage/session-store.js";
@@ -28,6 +29,7 @@ describe("pipeline rate limit exemption", () => {
     const gratitudeStore = new GratitudeStore(db);
     const activationStore = new BehavioralActivationStore(db);
     const medicationStore = new MedicationStore(db);
+    const moodEventStore = new MoodEventStore(db);
     const rateLimitStore = new RateLimitStore(db);
     const safetyIncidentStore = new SafetyIncidentStore(db);
     const rateLimiter = new RateLimiter(rateLimitStore, 30 * 60 * 1000, 100);
@@ -39,7 +41,7 @@ describe("pipeline rate limit exemption", () => {
       sessionStore,
       rateLimiter,
       safetyIncidentStore,
-      toolHandlerDeps: { checkinStore, thoughtRecordStore, gratitudeStore, activationStore, medicationStore },
+      toolHandlerDeps: { checkinStore, thoughtRecordStore, gratitudeStore, activationStore, medicationStore, moodEventStore },
       now: () => now,
     });
 
