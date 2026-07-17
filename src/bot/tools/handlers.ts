@@ -2,6 +2,7 @@ import type { BehavioralActivationStore } from "../../storage/behavioral-activat
 import type { CheckinRow, CheckinStore } from "../../storage/checkin-store.js";
 import type { GratitudeStore } from "../../storage/gratitude-store.js";
 import type { MedicationRow, MedicationStore } from "../../storage/medication-store.js";
+import type { MoodEventStore } from "../../storage/mood-event-store.js";
 import type { ThoughtRecordStore } from "../../storage/thought-record-store.js";
 import { shiftJstDateString, toJstDateString } from "../../utils/date.js";
 
@@ -11,6 +12,7 @@ export interface ToolHandlerDeps {
   gratitudeStore: GratitudeStore;
   activationStore: BehavioralActivationStore;
   medicationStore: MedicationStore;
+  moodEventStore: MoodEventStore;
 }
 
 function numberOrUndefined(value: unknown): number | undefined {
@@ -109,6 +111,26 @@ export function createToolExecutor(
           now(),
         );
         return `チェックインを${row.date}分として保存したぞ。`;
+      }
+
+      case "save_mood_event": {
+        const mood = numberOrUndefined(input.mood);
+        if (mood === undefined) {
+          return "気分の数値が読み取れなかった。1〜10で教えてくれ。";
+        }
+        const date = stringOrUndefined(input.date) ?? todayIso(now());
+        const timepoint = stringOrUndefined(input.timepoint);
+        deps.moodEventStore.create(
+          {
+            userId,
+            date,
+            timepoint,
+            mood,
+            note: stringOrUndefined(input.note),
+          },
+          now(),
+        );
+        return `${date}の気分（${timepoint ?? "時点未指定"}: ${mood}/10）を時点記録として保存したぞ。`;
       }
 
       case "save_medication": {

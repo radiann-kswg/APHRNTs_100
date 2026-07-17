@@ -18,6 +18,7 @@ import { CheckinStore } from "./storage/checkin-store.js";
 import { openDatabase } from "./storage/db.js";
 import { GratitudeStore } from "./storage/gratitude-store.js";
 import { MedicationStore } from "./storage/medication-store.js";
+import { MoodEventStore } from "./storage/mood-event-store.js";
 import { RateLimitStore } from "./storage/rate-limit-store.js";
 import { SafetyIncidentStore } from "./storage/safety-incident-store.js";
 import { SessionStore } from "./storage/session-store.js";
@@ -37,6 +38,7 @@ async function main(): Promise<void> {
   const gratitudeStore = new GratitudeStore(db);
   const activationStore = new BehavioralActivationStore(db);
   const medicationStore = new MedicationStore(db);
+  const moodEventStore = new MoodEventStore(db);
   const rateLimitStore = new RateLimitStore(db);
   const safetyIncidentStore = new SafetyIncidentStore(db);
   const botStateStore = new BotStateStore(db);
@@ -77,7 +79,7 @@ async function main(): Promise<void> {
     sessionStore,
     rateLimiter,
     safetyIncidentStore,
-    toolHandlerDeps: { checkinStore, thoughtRecordStore, gratitudeStore, activationStore, medicationStore },
+    toolHandlerDeps: { checkinStore, thoughtRecordStore, gratitudeStore, activationStore, medicationStore, moodEventStore },
     now: () => new Date(),
   });
   if (bridge) {
