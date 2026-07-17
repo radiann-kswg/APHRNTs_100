@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS medication_logs (
   midday_taken INTEGER,
   after_meal_taken INTEGER,
   night_taken INTEGER,
-  prn_count INTEGER,         -- 発作時（頓服）の回数
+  prn_count INTEGER,         -- 発作時（顬服）の回数
   prn_notes TEXT,            -- きっかけ・効き具合などの自由記述
   notes TEXT,
   created_at TEXT NOT NULL,
@@ -109,4 +109,17 @@ CREATE TABLE IF NOT EXISTS claude_session_notes (
   content TEXT NOT NULL,
   source_path TEXT NOT NULL,
   imported_at TEXT NOT NULL
+);
+
+-- 気分の時点記録（瞬間値）。daily_checkins.mood は「一日の総括」、こちらは「その時点の気分」。
+-- 朝/昼/夜での気分の浮き沈み（推移）を総括と混同せずに残すためのテーブル。
+CREATE TABLE IF NOT EXISTS mood_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL,
+  date TEXT NOT NULL,          -- 対象日（JSTのYYYY-MM-DD）
+  recorded_at TEXT NOT NULL,   -- 記録時刻（ISO 8601）
+  timepoint TEXT,              -- 「朝」「昼」「夕方」「夜」「HH:MM」等の時点ラベル（自由記述）
+  mood INTEGER NOT NULL,       -- 1〜10
+  note TEXT,
+  created_at TEXT NOT NULL
 );
