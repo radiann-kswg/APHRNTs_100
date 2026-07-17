@@ -10,6 +10,7 @@ import { RateLimiter } from "./bot/ratelimit/index.js";
 import { loadEnv } from "./config/env.js";
 import { MisskeyClient } from "./misskey/client.js";
 import { createDailyReflectionTask, createWeeklySummaryTask } from "./scheduler/index.js";
+import { createMedicationReminderTask } from "./scheduler/med-reminder-task.js";
 import { TaskScheduler } from "./scheduler/task-scheduler.js";
 import { createTrendNudgeTask } from "./scheduler/trend-nudge-task.js";
 import { BehavioralActivationStore } from "./storage/behavioral-activation-store.js";
@@ -216,6 +217,14 @@ async function main(): Promise<void> {
       medicationStore,
       misskeyClient,
       hour: env.TREND_NUDGE_HOUR,
+    }),
+    createMedicationReminderTask({
+      botStateStore,
+      sessionStore,
+      medicationStore,
+      misskeyClient,
+      hour: env.MED_REMINDER_HOUR,
+      ownerUserId: env.BOT_OWNER_USER_ID || undefined,
     }),
   ]);
   scheduler.start();
