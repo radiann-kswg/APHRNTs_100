@@ -6,6 +6,7 @@ import { CheckinStore } from "../../../../src/storage/checkin-store.js";
 import { openDatabase } from "../../../../src/storage/db.js";
 import { GratitudeStore } from "../../../../src/storage/gratitude-store.js";
 import { MedicationStore } from "../../../../src/storage/medication-store.js";
+import { MoodEventStore } from "../../../../src/storage/mood-event-store.js";
 import { ThoughtRecordStore } from "../../../../src/storage/thought-record-store.js";
 
 describe("createToolExecutor", () => {
@@ -15,6 +16,7 @@ describe("createToolExecutor", () => {
   let gratitudeStore: GratitudeStore;
   let activationStore: BehavioralActivationStore;
   let medicationStore: MedicationStore;
+  let moodEventStore: MoodEventStore;
   let executeTool: (name: string, input: Record<string, unknown>) => Promise<string>;
 
   beforeEach(() => {
@@ -24,9 +26,10 @@ describe("createToolExecutor", () => {
     gratitudeStore = new GratitudeStore(db);
     activationStore = new BehavioralActivationStore(db);
     medicationStore = new MedicationStore(db);
+    moodEventStore = new MoodEventStore(db);
     executeTool = createToolExecutor(
       "user1",
-      { checkinStore, thoughtRecordStore, gratitudeStore, activationStore, medicationStore },
+      { checkinStore, thoughtRecordStore, gratitudeStore, activationStore, medicationStore, moodEventStore },
       () => new Date("2026-01-01T00:00:00Z"),
     );
   });
@@ -43,7 +46,7 @@ describe("createToolExecutor", () => {
     // reproduces the reported bug where a late-night/early-morning save landed on the wrong day.
     const jstBoundaryExecuteTool = createToolExecutor(
       "user1",
-      { checkinStore, thoughtRecordStore, gratitudeStore, activationStore, medicationStore },
+      { checkinStore, thoughtRecordStore, gratitudeStore, activationStore, medicationStore, moodEventStore },
       () => new Date("2026-07-11T20:00:00Z"),
     );
     await jstBoundaryExecuteTool("save_checkin", { mood: 5 });
@@ -124,5 +127,33 @@ describe("createToolExecutor", () => {
   it("returns a message for unknown tools", async () => {
     const result = await executeTool("unknown_tool", {});
     expect(result).toContain("不明");
+  });
+  it("save_mood_event persists a timepoint mood record", async () => {
+    const result = await executeTool("save_mood_event", { date: "2026-01-01", timepoint: "朝", mood: 7, note: "運動後" });
+    expect(result).toContain("2026-01-01");
+    expect(result).toContain("朝");
+    const rows = moodEventStore.listSince("user1", "2026-01-01");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.mood).toBe(7);
+    expect(rows[0]?.timepoint).toBe("朝");
+    expect(rows[0]?.note).toBe("運動後");
+  });
+
+  it("save_mood_event defaults the omitted date to today in JST", async () => {
+    const jstBoundaryExecuteTool = createToolExecutor(
+      "user1",
+      { checkinStore, thoughtRecordStore, gratitudeStore, activationStore, medicationStore, moodEventStore },
+      () => new Date("2026-07-11T20:00:00Z"), // JSTでは2026-07-12
+    );
+    await jstBoundaryExecuteTool("save_mood_event", { mood: 4 });
+    const rows = moodEventStore.listSince("user1", "2026-07-12");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.date).toBe("2026-07-12");
+  });
+
+  it("save_mood_event without a mood value asks again instead of saving", async () => {
+    const result = await executeTool("save_mood_event", { date: "2026-01-01", timepoint: "夜" });
+    expect(result).toContain("読み取れなかった");
+    expect(moodEventStore.listSince("user1", "2026-01-01")).toHaveLength(0);
   });
 });
