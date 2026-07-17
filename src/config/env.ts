@@ -29,6 +29,8 @@ const envSchema = z.object({
   DAILY_REFLECTION_HOUR: z.coerce.number().int().min(0).max(23).default(20),
   // 傾向検知（気分低下＋服薬ギャップ）による優しい声かけを1日1回チェックする時刻
   TREND_NUDGE_HOUR: z.coerce.number().int().min(0).max(23).default(21),
+  // 夜の服薬リマインドを送る時刻（その日の夜🌙が服用済みならスキップ）
+  MED_REMINDER_HOUR: z.coerce.number().int().min(0).max(23).default(18),
 
   // Claude連携ブリッジ（logs/ ⇄ SQLite）
   CLAUDE_SYNC_ENABLED: z
