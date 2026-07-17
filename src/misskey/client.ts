@@ -112,6 +112,43 @@ export class MisskeyClient {
     await this.api.request("chat/messages/create-to-user", { toUserId, text });
   }
 
+  /**
+   * 自分宛てメンションをREST APIで取得する（WS切断中の取りこぼし回収=replay用）。
+   * sinceIdを渡すとそれより新しいものだけを取得する。返り値の順序はAPI依存のため呼び出し側でソートすること。
+   */
+  async fetchMentionsSince(sinceId: string | null, limit = 30): Promise<MentionNote[]> {
+    const notes = (await this.api.request("notes/mentions", {
+      limit,
+      ...(sinceId ? { sinceId } : {}),
+    })) as Array<{ id: string; userId: string; text?: string | null }>;
+    return notes.map((note) => ({ id: note.id, userId: note.userId, text: note.text ?? "" }));
+  }
+
+  /**
+   * 指定ユーザーとの一対一チャットをREST APIで取得し、相手からの受信分だけを返す（replay用）。
+   * sinceIdを渡すとそれより新しいものだけを取得する。返り値の順序はAPI依存のため呼び出し側でソートすること。
+   */
+  async fetchOwnerChatSince(
+    ownerUserId: string,
+    sinceId: string | null,
+    limit = 30,
+  ): Promise<IncomingChatMessage[]> {
+    const myId = await this.myUserId();
+    const messages = (await this.api.request("chat/messages/user-timeline", {
+      userId: ownerUserId,
+      limit,
+      ...(sinceId ? { sinceId } : {}),
+    })) as Array<{ id: string; fromUserId: string; text?: string | null; createdAt: string }>;
+    return messages
+      .filter((message) => message.fromUserId !== myId)
+      .map((message) => ({
+        id: message.id,
+        fromUserId: message.fromUserId,
+        text: message.text ?? "",
+        createdAt: message.createdAt,
+      }));
+  }
+
   private myUserId(): Promise<string> {
     this.myUserIdPromise ??= this.api.request("i", {}).then((me) => me.id);
     return this.myUserIdPromise;
