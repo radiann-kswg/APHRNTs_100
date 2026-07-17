@@ -16,6 +16,9 @@ ENV_FILE="$APP_DIR/.env"
 STALE_THRESHOLD_SEC=180
 # WS切断状態が5分続いたら異常とみなす（reconnecting-websocketの自動再接続を待つ猶予）。
 DISCONNECTED_THRESHOLD_SEC=300
+# 直近1時間のWS切断回数がこの回数以上なら「切れては繋ぎ直し」の頻発（churn）とみなして再起動する。
+# 短い切断の繰り返しは上記2つのしきい値をすり抜け、切断の隙間でメッセージを取りこぼすため。
+CHURN_DISCONNECTS_THRESHOLD=8
 LOG_PREFIX="[watchdog]"
 
 is_unit_failed() {
@@ -69,6 +72,14 @@ fi
 
 ws_connected=$(sed -n 's/.*"wsConnected":[[:space:]]*\([a-z]*\).*/\1/p' "$HEARTBEAT_PATH" | head -1)
 last_disconnected=$(sed -n 's/.*"lastDisconnectedAt":[[:space:]]*"\([^"]*\)".*/\1/p' "$HEARTBEAT_PATH" | head -1)
+disconnects_last_hour=$(sed -n 's/.*"disconnectsLastHour":[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$HEARTBEAT_PATH" | head -1)
+
+# churn検知: 接続中でも切断⇄再接続を繰り返しているなら再起動でストリームを張り直す
+# （再起動後はカウントが0にリセットされるため、連続再起動にはならない）
+if [ -n "$disconnects_last_hour" ] && [ "$disconnects_last_hour" -ge "$CHURN_DISCONNECTS_THRESHOLD" ]; then
+  restart_service "ws churn (${disconnects_last_hour} disconnects in last hour)"
+  exit 0
+fi
 
 if [ "$ws_connected" = "false" ] && [ -n "$last_disconnected" ]; then
   disconnected_epoch=$(date -d "$last_disconnected" +%s 2>/dev/null || echo "$now_epoch")
