@@ -32,6 +32,13 @@ export const MISSKEY_STABILITY_MS = 60_000;
 // 短時間切断（フラッピング）がこの回数連続したら警告ログを出す閾値。
 export const MISSKEY_FLAP_ALERT_THRESHOLD = 3;
 
+// 取りこぼし回収（replay）の定期実行間隔（ms）。
+// keepaliveで接続が安定して再接続が起きなくなると、replayが接続イベント起点でしか
+// 走らず、ライブのメンション/一対一チャットの取りこぼしを拾えなくなる。これを防ぐため、
+// 接続の有無に依らずこの間隔でREST APIから未処理分を回収する安全網（詳細は
+// src/bot/replay.ts・src/index.ts）。一対一チャットのライブ受信が未達でも、この間隔内で応答できる。
+export const DEFAULT_REPLAY_INTERVAL_MS = 60_000;
+
 // Claude連携ブリッジ（logs/ ⇄ SQLite）の既定値
 // Bot→Claude: ダイジェスト（logs/bot-digest.md）に含める日数
 export const CLAUDE_BRIDGE_DIGEST_DAYS = 14;
