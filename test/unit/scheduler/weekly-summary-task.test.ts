@@ -9,31 +9,30 @@ import { buildWeeklyTrend, shouldRunNow } from "../../../src/scheduler/weekly-su
 
 describe("shouldRunNow", () => {
   it("returns false when the day of week does not match", () => {
-    const now = new Date("2026-01-05T20:00:00");
-    const wrongDay = (now.getDay() + 1) % 7;
-    expect(shouldRunNow(null, now, wrongDay, now.getHours())).toBe(false);
+    const now = new Date("2026-01-05T20:00:00+09:00");
+    expect(shouldRunNow(null, now, 2, 20)).toBe(false);
   });
 
   it("returns false when the hour does not match", () => {
-    const now = new Date("2026-01-05T20:00:00");
-    expect(shouldRunNow(null, now, now.getDay(), now.getHours() + 1)).toBe(false);
+    const now = new Date("2026-01-05T20:00:00+09:00");
+    expect(shouldRunNow(null, now, 1, 21)).toBe(false);
   });
 
   it("returns true on the first run within the matching slot", () => {
-    const now = new Date("2026-01-05T20:00:00");
-    expect(shouldRunNow(null, now, now.getDay(), now.getHours())).toBe(true);
+    const now = new Date("2026-01-05T20:00:00+09:00");
+    expect(shouldRunNow(null, now, 1, 20)).toBe(true);
   });
 
   it("returns false if already run within the last 20 hours", () => {
-    const now = new Date("2026-01-05T20:00:00");
+    const now = new Date("2026-01-05T20:00:00+09:00");
     const lastRunAt = new Date(now.getTime() - 60 * 60 * 1000);
-    expect(shouldRunNow(lastRunAt, now, now.getDay(), now.getHours())).toBe(false);
+    expect(shouldRunNow(lastRunAt, now, 1, 20)).toBe(false);
   });
 
   it("returns true if the last run was more than 20 hours ago", () => {
-    const now = new Date("2026-01-05T20:00:00");
+    const now = new Date("2026-01-05T20:00:00+09:00");
     const lastRunAt = new Date(now.getTime() - 21 * 60 * 60 * 1000);
-    expect(shouldRunNow(lastRunAt, now, now.getDay(), now.getHours())).toBe(true);
+    expect(shouldRunNow(lastRunAt, now, 1, 20)).toBe(true);
   });
 });
 

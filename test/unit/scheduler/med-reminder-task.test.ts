@@ -18,8 +18,8 @@ function createFakeMisskeyClient(): { client: MisskeyClient; messages: { toUserI
   return { client, messages };
 }
 
-// 18:00 JST（タスクの時刻ゲートはホストのローカル時間で判定するため、ローカル時刻で生成する）
-const AT_18 = new Date("2026-07-17T18:10:00");
+// 18:00 JST（タスクの時刻ゲートはJST基準で判定するため、JSTを明示して生成する）
+const AT_18 = new Date("2026-07-17T18:10:00+09:00");
 // タスクは記録日をJST基準で引くため、テスト側も同じ変換で「その日」を求める（ホストTZに依存しない）
 const TODAY_JST = toJstDateString(AT_18);
 
@@ -53,7 +53,7 @@ describe("createMedicationReminderTask", () => {
     sessionStore.appendExchange("owner1", "hi", "yo", AT_18);
     const { task, messages } = createTask("owner1");
 
-    await task.run(new Date("2026-07-17T09:00:00"));
+    await task.run(new Date("2026-07-17T09:00:00+09:00"));
 
     expect(messages).toHaveLength(0);
   });

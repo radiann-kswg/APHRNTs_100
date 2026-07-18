@@ -150,7 +150,7 @@ describe("createTrendNudgeTask", () => {
     const sessionStore = new SessionStore(db);
     const checkinStore = new CheckinStore(db);
     const medicationStore = new MedicationStore(db);
-    sessionStore.appendExchange("u1", "hi", "yo", new Date("2026-01-15T09:00:00"));
+    sessionStore.appendExchange("u1", "hi", "yo", new Date("2026-01-15T09:00:00+09:00"));
     seedTriggeringData(checkinStore, medicationStore, "u1");
     const { client, messages } = createFakeMisskeyClient();
 
@@ -163,7 +163,7 @@ describe("createTrendNudgeTask", () => {
       hour: 20,
     });
 
-    await task.run(new Date("2026-01-15T09:00:00"));
+    await task.run(new Date("2026-01-15T09:00:00+09:00"));
     expect(messages).toHaveLength(0);
   });
 
@@ -171,7 +171,7 @@ describe("createTrendNudgeTask", () => {
     const sessionStore = new SessionStore(db);
     const checkinStore = new CheckinStore(db);
     const medicationStore = new MedicationStore(db);
-    const now = new Date("2026-01-15T20:00:00");
+    const now = new Date("2026-01-15T20:00:00+09:00");
     sessionStore.appendExchange("u1", "hi", "yo", now);
     seedTriggeringData(checkinStore, medicationStore, "u1");
     const { client, messages } = createFakeMisskeyClient();
@@ -196,7 +196,7 @@ describe("createTrendNudgeTask", () => {
     const checkinStore = new CheckinStore(db);
     const medicationStore = new MedicationStore(db);
     const botStateStore = new BotStateStore(db);
-    const day1 = new Date("2026-01-15T20:00:00");
+    const day1 = new Date("2026-01-15T20:00:00+09:00");
     sessionStore.appendExchange("u1", "hi", "yo", day1);
     seedTriggeringData(checkinStore, medicationStore, "u1");
     const { client, messages } = createFakeMisskeyClient();
@@ -222,7 +222,7 @@ describe("createTrendNudgeTask", () => {
     const sessionStore = new SessionStore(db);
     const checkinStore = new CheckinStore(db);
     const medicationStore = new MedicationStore(db);
-    const now = new Date("2026-01-15T20:00:00");
+    const now = new Date("2026-01-15T20:00:00+09:00");
     sessionStore.appendExchange("u1", "hi", "yo", now);
     const { client, messages } = createFakeMisskeyClient();
 
