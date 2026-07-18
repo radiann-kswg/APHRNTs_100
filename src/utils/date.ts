@@ -30,3 +30,13 @@ export function shiftJstDateString(dateStr: string, deltaDays: number): string {
   const d = String(shifted.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
+
+/** ホストのタイムゾーンに関わらず、常にJST(UTC+9)の時(0〜23)を返す */
+export function toJstHour(date: Date): number {
+  return toJstShifted(date).getUTCHours();
+}
+
+/** ホストのタイムゾーンに関わらず、常にJST(UTC+9)の曜日(0=日〜6=土)を返す */
+export function toJstDayOfWeek(date: Date): number {
+  return toJstShifted(date).getUTCDay();
+}
