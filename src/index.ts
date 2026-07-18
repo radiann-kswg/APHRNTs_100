@@ -97,7 +97,12 @@ async function main(): Promise<void> {
     return;
   }
 
-  const misskeyClient = new MisskeyClient({ host: env.MISSKEY_HOST, token: env.MISSKEY_TOKEN });
+  const misskeyClient = new MisskeyClient({
+    host: env.MISSKEY_HOST,
+    token: env.MISSKEY_TOKEN,
+    keepalive: { pingIntervalMs: env.MISSKEY_PING_INTERVAL_MS },
+    logger,
+  });
   const onMention = createMentionHandler(handleMessage, misskeyClient);
   const onChatMessage = createChatHandler(handleMessage, misskeyClient);
 
@@ -109,6 +114,20 @@ async function main(): Promise<void> {
     onMention,
     onChatMessage,
   });
+  // replayを1回実行し、回収があればログする。失敗しても投げない（内部でrunReplayが多重実行を防ぐ）。
+  // 接続イベント起点（scheduleReplay）と、接続の有無に依らない定期実行の両方から呼ぶ。
+  async function runReplayOnce(): Promise<void> {
+    try {
+      const result = await replay.runReplay();
+      if (result.mentions > 0 || result.chats > 0) {
+        logger.info(
+          `取りこぼしていたメッセージを回収した（メンション${result.mentions}件・チャット${result.chats}件）。`,
+        );
+      }
+    } catch (error) {
+      logger.warn("取りこぼし回収（replay）に失敗した。次回の実行時に再試行する", error);
+    }
+  }
   // 接続確立の直後はチャンネル購読が安定していないことがあるため、少し置いてからreplayする
   const REPLAY_DELAY_MS = 3000;
   let replayTimer: NodeJS.Timeout | null = null;
@@ -116,18 +135,7 @@ async function main(): Promise<void> {
     if (replayTimer) clearTimeout(replayTimer);
     replayTimer = setTimeout(() => {
       replayTimer = null;
-      replay
-        .runReplay()
-        .then((result) => {
-          if (result.mentions > 0 || result.chats > 0) {
-            logger.info(
-              `切断中に届いていたメッセージを回収した（メンション${result.mentions}件・チャット${result.chats}件）。`,
-            );
-          }
-        })
-        .catch((error: unknown) => {
-          logger.warn("取りこぼし回収（replay）に失敗した。次回の再接続時に再試行する", error);
-        });
+      void runReplayOnce();
     }, REPLAY_DELAY_MS);
   }
 
@@ -192,6 +200,10 @@ async function main(): Promise<void> {
   heartbeat.start();
 
   const scheduler = new TaskScheduler([
+    // 取りこぼし回収（replay）の定期実行。keepaliveで接続が安定し再接続が起きなくても、
+    // メンション/一対一チャットの取りこぼしをこの間隔でREST APIから拾い直す安全網。
+    // 再接続起点のscheduleReplayと重なってもrunReplay側で多重実行を抑止する。
+    { name: "replay", intervalMs: env.REPLAY_INTERVAL_MS, run: () => runReplayOnce() },
     createWeeklySummaryTask({
       botStateStore,
       sessionStore,
