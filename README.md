@@ -118,7 +118,7 @@ npm run sync:remote   # 下記3つをこの順で実行（通常はこれ1本で
 - **前提**: このPCに[gcloud CLI](https://cloud.google.com/sdk/docs/install)がインストール・認証済みで（`gcloud auth list`で本番VMのプロジェクトへアクセスできるアカウントが見えること）、かつVM上でsudo権限を持つユーザーとしてSSH接続できること（VM本体はOS Loginで認証、Bot自体は非特権ユーザー`aphrnts-bot`で稼働しているため、ダイジェストの読み取りには`sudo cat`を、転送したログの配置とVM上の同期実行には`sudo install` / `sudo -u aphrnts-bot`を使う）。
 - **設定**: `.env`の`GCE_PROJECT` / `GCE_ZONE` / `GCE_INSTANCE` / `REMOTE_BOT_DIGEST_PATH` / `REMOTE_BOT_USER`（既定値は本番VM構成に合わせ済み。VM再構築時のみ変更）。VM上のログディレクトリ・リポジトリのパスは`REMOTE_BOT_DIGEST_PATH`から導出するため、別途の設定は不要です。
 - **転送範囲**: `logs/`直下の`YYYY-MM-DD.md`のうち、JST基準で直近7日分（Botがプロンプトへ注入する範囲と同じ）。空ファイル・`weekly-*.md`・`bot-digest.md`・`README.md`は対象外です。一時的に範囲を変える場合は`npm run sync:push-remote -- --days=14`のように指定します。同じログを何度転送しても日付をキーに上書きされるだけなので、繰り返し実行しても結果は変わりません。
-- **定期実行**: 常に最新化しておきたい場合は、OS側のタスクスケジューラ等でこのコマンドを定期実行するよう設定してください（Windowsの場合の設定例は[deploy/README.md](./deploy/README.md#ローカルpc側の定期同期windowsタスクスケジューラ)を参照）。Claude Desktopアプリ自体はコードを実行できないため、この定期実行はOS側の仕組みに委ねる必要があります。
+- **定期実行（実運用）**: 現在はこの相互同期（Claude→Bot・Bot→Claudeの両方向）を本番運用の標準としており、ローカルPCのタスクスケジューラ`APHRNTs100-PullBotDigest`が**毎日03:00 JST**に`npm run sync:remote`を実行します。これによりヘルスシート由来の記録（`logs/bot-digest.md`）とセンパイのセッション記録（`logs/YYYY-MM-DD.md`）が相互に取得・反映されます（Windowsの設定例・スケジュールの変更方法は[deploy/README.md](./deploy/README.md#ローカルpc側の定期同期windowsタスクスケジューラ)を参照）。Claude Desktopアプリ自体はコードを実行できないため、この定期実行はOS側の仕組みに委ねる必要があります。
 
 ### 仕様
 
@@ -175,6 +175,8 @@ npm run sync            # Claude連携ブリッジの手動同期（上記セク
 npm test                # vitestでユニット・結合テストを実行
 npm run typecheck       # 型チェックのみ
 ```
+
+- Misskeyストリームは、アイドル切断を防ぐkeepalive（定期ping・`MISSKEY_PING_INTERVAL_MS`で調整可）と、指数バックオフ＋ジッタによる自前の自動再接続で維持します（数分おきの切断＝フラッピング対策。設計は[deploy/README.md](./deploy/README.md#misskeyストリームの接続維持keepalive自動再接続)を参照）。
 
 ## 関連リンク
 
