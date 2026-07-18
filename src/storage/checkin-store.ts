@@ -60,6 +60,13 @@ export class CheckinStore {
       .get(input.userId, input.date) as CheckinRow;
   }
 
+  /** 指定ユーザー・日付の1件を取得する（無ければ undefined）。逆マージの非破壊判定に使う。 */
+  get(userId: string, date: string): CheckinRow | undefined {
+    return this.db
+      .prepare("SELECT * FROM daily_checkins WHERE user_id = ? AND date = ?")
+      .get(userId, date) as CheckinRow | undefined;
+  }
+
   listSince(userId: string, sinceDate: string): CheckinRow[] {
     return this.db
       .prepare("SELECT * FROM daily_checkins WHERE user_id = ? AND date >= ? ORDER BY date ASC")
