@@ -123,8 +123,9 @@ function main(): void {
     if (mode === "import" || mode === "sync") {
       const result = runImport(deps);
       const medicationNote = result.medicationMerged > 0 ? `・服薬の逆マージ ${result.medicationMerged}日分` : "";
+      const checkinNote = result.checkinMerged > 0 ? `・チェックイン補完 ${result.checkinMerged}日分` : "";
       console.log(
-        `[sync] Claude→Bot: ${deps.logsDir}/ から ${result.imported}件のセッション記録を取り込んだ（スキップ ${result.skipped}件${medicationNote}）。`,
+        `[sync] Claude→Bot: ${deps.logsDir}/ から ${result.imported}件のセッション記録を取り込んだ（スキップ ${result.skipped}件${medicationNote}${checkinNote}）。`,
       );
     }
     if (mode === "export" || mode === "sync") {
