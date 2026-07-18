@@ -97,7 +97,12 @@ async function main(): Promise<void> {
     return;
   }
 
-  const misskeyClient = new MisskeyClient({ host: env.MISSKEY_HOST, token: env.MISSKEY_TOKEN });
+  const misskeyClient = new MisskeyClient({
+    host: env.MISSKEY_HOST,
+    token: env.MISSKEY_TOKEN,
+    keepalive: { pingIntervalMs: env.MISSKEY_PING_INTERVAL_MS },
+    logger,
+  });
   const onMention = createMentionHandler(handleMessage, misskeyClient);
   const onChatMessage = createChatHandler(handleMessage, misskeyClient);
 

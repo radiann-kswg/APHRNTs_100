@@ -176,6 +176,8 @@ npm test                # vitestでユニット・結合テストを実行
 npm run typecheck       # 型チェックのみ
 ```
 
+- Misskeyストリームは、アイドル切断を防ぐkeepalive（定期ping・`MISSKEY_PING_INTERVAL_MS`で調整可）と、指数バックオフ＋ジッタによる自前の自動再接続で維持します（数分おきの切断＝フラッピング対策。設計は[deploy/README.md](./deploy/README.md#misskeyストリームの接続維持keepalive自動再接続)を参照）。
+
 ## 関連リンク
 
 - 創作キャラクターに関するガイドライン: https://github.com/radiann-kswg/100BeautiesLab_CreationsDB/blob/develop/guideline.md

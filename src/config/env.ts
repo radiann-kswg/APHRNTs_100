@@ -1,10 +1,13 @@
 import "dotenv/config";
 import { z } from "zod";
-import { CLAUDE_BRIDGE_DIGEST_DAYS } from "./constants.js";
+import { CLAUDE_BRIDGE_DIGEST_DAYS, DEFAULT_MISSKEY_PING_INTERVAL_MS } from "./constants.js";
 
 const envSchema = z.object({
   MISSKEY_HOST: z.string().optional().default(""),
   MISSKEY_TOKEN: z.string().optional().default(""),
+  // Misskeyストリームのkeepalive（アイドル切断防止）用ping送信間隔（ミリ秒）。
+  // サーバ/LBのWSアイドルタイムアウトより十分短くする（既定30秒）。
+  MISSKEY_PING_INTERVAL_MS: z.coerce.number().int().positive().default(DEFAULT_MISSKEY_PING_INTERVAL_MS),
 
   AI_PROVIDER: z.enum(["anthropic", "openai", "gemini"]).default("anthropic"),
   ANTHROPIC_API_KEY: z.string().optional().default(""),
