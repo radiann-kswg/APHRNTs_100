@@ -3,6 +3,7 @@ import type { CheckinStore } from "../storage/checkin-store.js";
 import type { GratitudeStore } from "../storage/gratitude-store.js";
 import type { MedicationStore } from "../storage/medication-store.js";
 import type { ThoughtRecordStore } from "../storage/thought-record-store.js";
+import { toJstDayOfWeek } from "../utils/date.js";
 import { shouldRunDailyNow } from "./schedule-utils.js";
 
 export interface WeeklySummaryDeps {
@@ -15,9 +16,9 @@ export interface WeeklySummaryDeps {
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
-/** 指定した曜日・時刻の枠に入っていて、かつ前回実行から20時間以上経っていれば実行対象とする純関数 */
+/** 指定した曜日・時刻（いずれもJST基準）の枠に入っていて、かつ前回実行から20時間以上経っていれば実行対象とする純関数 */
 export function shouldRunNow(lastRunAt: Date | null, now: Date, dayOfWeek: number, hour: number): boolean {
-  if (now.getDay() !== dayOfWeek) {
+  if (toJstDayOfWeek(now) !== dayOfWeek) {
     return false;
   }
   return shouldRunDailyNow(lastRunAt, now, hour);

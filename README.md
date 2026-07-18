@@ -177,6 +177,7 @@ npm run typecheck       # 型チェックのみ
 ```
 
 - Misskeyストリームは、アイドル切断を防ぐkeepalive（定期ping・`MISSKEY_PING_INTERVAL_MS`で調整可）と、指数バックオフ＋ジッタによる自前の自動再接続で維持します（数分おきの切断＝フラッピング対策。設計は[deploy/README.md](./deploy/README.md#misskeyストリームの接続維持keepalive自動再接続)を参照）。
+- メンション/一対一チャットの取りこぼし回収（replay）は、再接続時だけでなく`REPLAY_INTERVAL_MS`（既定60秒）ごとに定期実行し、REST APIで未処理分を拾い直します。keepaliveで接続が安定して再接続が起きなくなっても取りこぼしを回収でき、ライブ受信（特に一対一チャット）が未達でもこの間隔内で応答できます。
 
 ## 関連リンク
 

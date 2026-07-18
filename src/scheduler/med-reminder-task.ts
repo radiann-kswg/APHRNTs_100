@@ -19,7 +19,7 @@ export interface MedicationReminderTaskDeps {
   sessionStore: SessionStore;
   medicationStore: MedicationStore;
   misskeyClient: MisskeyClient;
-  /** リマインドを送る時刻（時・ホストのローカル時間。既定は env.MED_REMINDER_HOUR＝18） */
+  /** リマインドを送る時刻（時・JST基準。既定は env.MED_REMINDER_HOUR＝18） */
   hour: number;
   /** 設定時はオーナーだけに送る（服薬記録は個人のものなので、通常はこちらを使う） */
   ownerUserId?: string;
