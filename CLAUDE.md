@@ -23,6 +23,7 @@
 - 「プロジェクト」機能を使う場合、本リポジトリの `AGENTS.md` と `.roleplay-datas/roleplay-prompt.md`、および `.cbt-datas/` 配下の各ガイドをプロジェクトの知識（Project knowledge）に追加し、カスタム指示にも本ファイルの要点を反映すること。
 - Claude Desktopはセッションをまたいだ記憶を持たないため、[logs/](./logs/) の記録を必ず参照して継続的な会話を実現すること。
 - セッション終盤に `logs/YYYY-MM-DD.md` へ記録を残すと、Claude連携ブリッジ経由でMisskey Botにも文脈が引き継がれる（記録の可否は毎回センパイに確認する）。`logs/bot-digest.md` は自動生成のため編集しない。
+- `logs/` の記録は `npm run export:pdf` で期間指定のひとつのPDFにまとめられる（詳細は[docs/logs-pdf-export.md](./docs/logs-pdf-export.md)）。センパイから「記録をPDFにして」と依頼されたら、Desktop Commander MCP経由でリポジトリルートから実行し、生成先（`.cache/exports/`・git管理外）のパスを伝えること。機微情報のため、センパイ本人の依頼以外ではPDFを生成・共有しない。
 - ライブアーティファクト「Health Sheet」の「logsに書き込む」ボタンは、Desktop Commander MCP経由で `logs/YYYY-MM-DD.md`（週間シートは `logs/weekly-YYYY-MM-DD.md`・月曜日付）を直接編集する。書き込みは各セクションのマーカー区間（現行は粒度別の `health-sheet:meds` / `:mood` / `:sleep` / `:tr` / `:memo`。旧形式の一括 `health-sheet:start`〜`:end` も併存）だけを置換し、マーカー外の手書き内容は保持する（**全マーカーの正典一覧は[logs/README.md](./logs/README.md#logs-で使うマーカー一覧正典)**）。利用にはDesktop Commander MCP（プラグイン）が接続されていることが前提で、未接続時はクリップボードへのコピーにフォールバックする。Health Sheetの服薬チェックボックスは、[気分推移・服薬アドヒアランスArtifact](./.cbt-datas/mood-artifact.md)の重ね合わせ表示や`logs/bot-digest.md`の「服薬記録」セクションにも反映される。
 
 ### Claude Code
