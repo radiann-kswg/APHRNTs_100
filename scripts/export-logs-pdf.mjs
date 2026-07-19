@@ -11,6 +11,8 @@
 //   --from YYYY-MM-DD   この日以降の記録を含める（省略時: 最古の記録から）
 //   --to YYYY-MM-DD     この日以前の記録を含める（省略時: 今日まで）
 //   --output <path>     出力PDFパス（省略時: .cache/exports/momo-logs_<from>_<to>.pdf）
+//                       --split 時は出力ディレクトリとして扱う
+//   --split             1つにまとめず、日付ごとに1PDFずつ出力する
 //   --include-weekly    週間シート logs/weekly-YYYY-MM-DD.md も含める
 //   --include-digest    logs/bot-digest.md（Misskey Bot記録ダイジェスト）も巻末に含める
 //   --keep-html         中間生成物のHTMLを削除せず残す（デバッグ用）
@@ -42,6 +44,7 @@ function parseArgs(argv) {
     from: null,
     to: null,
     output: null,
+    split: false,
     includeWeekly: false,
     includeDigest: false,
     keepHtml: false,
@@ -53,13 +56,14 @@ function parseArgs(argv) {
       case '--from': opts.from = argv[++i]; break;
       case '--to': opts.to = argv[++i]; break;
       case '--output': opts.output = argv[++i]; break;
+      case '--split': opts.split = true; break;
       case '--include-weekly': opts.includeWeekly = true; break;
       case '--include-digest': opts.includeDigest = true; break;
       case '--keep-html': opts.keepHtml = true; break;
       case '--browser': opts.browser = argv[++i]; break;
       case '--help':
       case '-h':
-        console.log('使い方: node scripts/export-logs-pdf.mjs [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--output <path>] [--include-weekly] [--include-digest] [--keep-html] [--browser <path>]');
+        console.log('使い方: node scripts/export-logs-pdf.mjs [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--output <path>] [--split] [--include-weekly] [--include-digest] [--keep-html] [--browser <path>]');
         process.exit(0);
         break;
       default:
@@ -233,10 +237,13 @@ function sectionTitle(file) {
   return file.kind === 'weekly' ? `週間シート ${base}〜` : base;
 }
 
-function buildReportHtml(files, opts, generatedAt) {
+function buildReportHtml(files, opts, generatedAt, periodOverride = null) {
   const first = files.find((f) => f.date)?.date ?? '—';
   const last = [...files].reverse().find((f) => f.date)?.date ?? '—';
-  const period = `${opts.from ?? first} 〜 ${opts.to ?? last}`;
+  const period = periodOverride ?? `${opts.from ?? first} 〜 ${opts.to ?? last}`;
+  const metaLine = periodOverride
+    ? `${period} ｜ 生成日時: ${generatedAt}`
+    : `期間: ${period} ｜ 記録ファイル: ${files.length}件 ｜ 生成日時: ${generatedAt}`;
 
   const sections = files.map((file) => {
     const md = fs.readFileSync(path.join(logsDir, file.name), 'utf8');
@@ -313,7 +320,7 @@ function buildReportHtml(files, opts, generatedAt) {
 <body>
   <header class="cover">
     <h1>100(モモ) 生活管理ログ</h1>
-    <div class="meta">期間: ${escapeHtml(period)} ｜ 記録ファイル: ${files.length}件 ｜ 生成日時: ${escapeHtml(generatedAt)}</div>
+    <div class="meta">${escapeHtml(metaLine)}</div>
     <div class="caution">⚠ このPDFには体調・服薬など機微な個人情報が含まれます。取り扱い・共有はセンパイ本人の判断で慎重に。</div>
   </header>
 ${sections}
@@ -399,34 +406,46 @@ if (files.length === 0) {
 
 const first = files.find((f) => f.date)?.date ?? 'all';
 const last = [...files].reverse().find((f) => f.date)?.date ?? 'all';
-const outPath = path.resolve(
-  repoRoot,
-  opts.output ?? path.join('.cache', 'exports', `momo-logs_${opts.from ?? first}_${opts.to ?? last}.pdf`),
-);
-fs.mkdirSync(path.dirname(outPath), { recursive: true });
+const rangeLabel = `${opts.from ?? first}_${opts.to ?? last}`;
 
 const now = new Date();
 const generatedAt = now.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', hour12: false });
-const htmlContent = buildReportHtml(files, opts, generatedAt);
-
-const htmlPath = opts.keepHtml
-  ? outPath.replace(/\.pdf$/i, '.html')
-  : path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'momo-logs-')), 'report.html');
-fs.writeFileSync(htmlPath, htmlContent, 'utf8');
-
 const browser = findBrowser(opts.browser);
 console.log(`対象: ${files.length}件（${first} 〜 ${last}） / ブラウザ: ${browser}`);
 
-try {
-  printToPdf(browser, htmlPath, outPath);
-} catch (err) {
-  console.error('PDF化に失敗しました。--keep-html でHTMLを確認するか、別のブラウザを--browserで指定してください。');
-  console.error(String(err?.stderr ?? err));
-  process.exit(1);
-} finally {
-  if (!opts.keepHtml) fs.rmSync(path.dirname(htmlPath), { recursive: true, force: true });
+const tmpDir = opts.keepHtml ? null : fs.mkdtempSync(path.join(os.tmpdir(), 'momo-logs-'));
+
+function exportOne(htmlContent, outPath) {
+  fs.mkdirSync(path.dirname(outPath), { recursive: true });
+  const htmlPath = opts.keepHtml
+    ? outPath.replace(/\.pdf$/i, '.html')
+    : path.join(tmpDir, `${path.basename(outPath, '.pdf')}.html`);
+  fs.writeFileSync(htmlPath, htmlContent, 'utf8');
+  try {
+    printToPdf(browser, htmlPath, outPath);
+  } catch (err) {
+    console.error('PDF化に失敗しました。--keep-html でHTMLを確認するか、別のブラウザを--browserで指定してください。');
+    console.error(String(err?.stderr ?? err));
+    process.exit(1);
+  }
+  const size = fs.statSync(outPath).size;
+  console.log(`✅ ${path.relative(repoRoot, outPath)}（${(size / 1024).toFixed(1)} KB）`);
 }
 
-const size = fs.statSync(outPath).size;
-console.log(`✅ PDFを出力しました: ${path.relative(repoRoot, outPath)}（${(size / 1024).toFixed(1)} KB）`);
-if (opts.keepHtml) console.log(`（中間HTML: ${path.relative(repoRoot, htmlPath)}）`);
+if (opts.split) {
+  // 日付ごとに1PDFずつ出力（--output は出力ディレクトリ扱い）
+  const outDir = path.resolve(repoRoot, opts.output ?? path.join('.cache', 'exports', `momo-logs_${rangeLabel}`));
+  for (const file of files) {
+    const stem = file.kind === 'digest' ? 'bot-digest'
+      : file.kind === 'weekly' ? `weekly-${file.date}`
+      : file.date;
+    const html = buildReportHtml([file], opts, generatedAt, sectionTitle(file));
+    exportOne(html, path.join(outDir, `momo-log_${stem}.pdf`));
+  }
+  console.log(`出力先ディレクトリ: ${path.relative(repoRoot, outDir)}`);
+} else {
+  const outPath = path.resolve(repoRoot, opts.output ?? path.join('.cache', 'exports', `momo-logs_${rangeLabel}.pdf`));
+  exportOne(buildReportHtml(files, opts, generatedAt), outPath);
+}
+
+if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true });

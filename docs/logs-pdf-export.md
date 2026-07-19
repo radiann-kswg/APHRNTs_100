@@ -18,11 +18,14 @@ npm run export:pdf
 # 期間を指定（例: 2026-07-09〜2026-07-17）
 npm run export:pdf -- --from 2026-07-09 --to 2026-07-17
 
+# 日付ごとに1PDFずつ分けて出力
+npm run export:pdf -- --from 2026-07-09 --to 2026-07-17 --split
+
 # 週間シートとBot記録ダイジェストも含める
 npm run export:pdf -- --to 2026-07-17 --include-weekly --include-digest
 ```
 
-出力先は既定で `.cache/exports/momo-logs_<from>_<to>.pdf`。
+出力先は既定で `.cache/exports/momo-logs_<from>_<to>.pdf`（`--split` 時はディレクトリ `.cache/exports/momo-logs_<from>_<to>/` に `momo-log_YYYY-MM-DD.pdf` として1日1ファイル）。
 
 ## オプション一覧
 
@@ -30,7 +33,8 @@ npm run export:pdf -- --to 2026-07-17 --include-weekly --include-digest
 | --- | --- |
 | `--from YYYY-MM-DD` | この日以降の記録を含める（省略時: 最古の記録から） |
 | `--to YYYY-MM-DD` | この日以前の記録を含める（省略時: 今日まで） |
-| `--output <path>` | 出力PDFのパス（省略時: `.cache/exports/momo-logs_<from>_<to>.pdf`） |
+| `--output <path>` | 出力PDFのパス（省略時: `.cache/exports/momo-logs_<from>_<to>.pdf`）。`--split` 時は出力ディレクトリとして扱う |
+| `--split` | 1つにまとめず、日付ごとに1PDFずつ出力する（ファイル名: `momo-log_YYYY-MM-DD.pdf`） |
 | `--include-weekly` | 週間シート `logs/weekly-YYYY-MM-DD.md` も含める |
 | `--include-digest` | `logs/bot-digest.md`（Misskey Bot記録ダイジェスト）を巻末に含める |
 | `--keep-html` | 中間生成物のHTMLを残す（レイアウト調整・デバッグ用） |
@@ -42,9 +46,9 @@ npm run export:pdf -- --to 2026-07-17 --include-weekly --include-digest
 
 Claude Desktop（＋Desktop Commander MCP）を導入している場合、センパイはチャットで「100(モモ)」に頼むだけでPDFを受け取れます。
 
-1. センパイ:「先週ぶんの記録をPDFにして」のように依頼する（期間を添えるとスムーズ）。
-2. Claude（100(モモ)）はDesktop Commander MCP経由でリポジトリルートから `npm run export:pdf -- --from ... --to ...` を実行する。
-3. 生成された `.cache/exports/*.pdf` のフルパスをセンパイに伝える（可能な環境ではファイルとしてチャットに添付する）。
+1. センパイ:「先週ぶんの記録をPDFにして」のように依頼する（期間や、まとめる／日付ごとに分けるの希望を添えるとスムーズ）。
+2. Claude（100(モモ)）はDesktop Commander MCP経由でリポジトリルートから `npm run export:pdf -- --from ... --to ...`（分割希望時は `--split` 付き）を実行する。
+3. 生成された `.cache/exports/` 配下のPDFのフルパスをセンパイに伝える（可能な環境ではファイルとしてチャットに添付する）。
 
 エージェント側の注意:
 
@@ -54,7 +58,7 @@ Claude Desktop（＋Desktop Commander MCP）を導入している場合、セン
 
 ## 出力内容
 
-- 表紙ヘッダー: 期間・記録ファイル数・生成日時・取り扱い注意の注記
+- 表紙ヘッダー: 期間・記録ファイル数・生成日時・取り扱い注意の注記（`--split` 時は各PDFにその日の日付）
 - 日次記録 `YYYY-MM-DD.md` を日付順に1セクションずつ（曜日つき見出し）
 - Health Sheet等のHTMLコメントマーカー（`<!-- health-sheet:... -->` 等）は出力から除去される（マーカー区間の中身は出力される）
 - `--include-weekly` 時は週間シート、`--include-digest` 時は `bot-digest.md` を末尾に付加
