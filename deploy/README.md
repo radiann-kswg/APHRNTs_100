@@ -73,14 +73,17 @@ Windowsの場合の設定例（PowerShell、管理者権限不要）:
 $repo = "C:\Visual Studio Code UserFile\APHRNTs_100"
 $action = New-ScheduledTaskAction -Execute "wscript.exe" `
   -Argument "`"$repo\scripts\run-hidden.vbs`" `"$repo\scripts\sync-remote-task.cmd`""
-$trigger = New-ScheduledTaskTrigger -Daily -At 3:00am
+$trigger = @(
+  (New-ScheduledTaskTrigger -Daily -At 3:00am),
+  (New-ScheduledTaskTrigger -Daily -At 10:00am)
+)
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd `
   -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
 Register-ScheduledTask -TaskName "APHRNTs100-PullBotDigest" -Action $action -Trigger $trigger `
   -Settings $settings -Description "本番VMとlogs/を相互同期する（ローカル→VMの取り込み・VM→ローカルのダイジェスト取得）" -Force
 ```
 
-- スケジュールは**毎日03:00 JST**（1日1回）。以前は「起動時＋30分ごと」の高頻度運用だったが、相互同期（`sync:remote`）は取得のみの頃よりgcloud呼び出しが増える（ssh/scp計5回程度）ため、1日1回に見直した。`-StartWhenAvailable`を付けているので、03:00にPCが起動していなくても次回起動時に取りこぼし分を実行する。
+- スケジュールは**毎日03:00と10:00 JST**（1日2回）。03:00の相互同期に加え、センパイが眠前〜起床後の朝一にMisskey Botへ報告することが多く、その朝の報告を確実に拾えるよう10:00の回を追加した（`$trigger`を配列にすれば1タスクで複数トリガーを持てる）。以前は「起動時＋30分ごと」の高頻度運用だったが、相互同期（`sync:remote`）は取得のみの頃よりgcloud呼び出しが増える（ssh/scp計5回程度）ため、現在は1日2回に抑えている。`-StartWhenAvailable`を付けているので、トリガー時刻にPCが起動していなくても次回起動時に取りこぼし分を実行する。
 - 同名タスクを上書きするため`-Force`を付ける。付けないと既存タスクがある場合に登録が失敗する。
 
 - 実行内容は[`scripts/sync-remote-task.cmd`](../scripts/sync-remote-task.cmd)（リポジトリ直下へ`cd`して`npm run sync:remote`を呼ぶだけの薄いラッパー）を、[`scripts/run-hidden.vbs`](../scripts/run-hidden.vbs)経由で起動する。タスクスケジューラが`.cmd`を直接実行するとトリガーのたびにコマンドプロンプトの窓が表示されてしまうため、`wscript.exe`でウィンドウ非表示（`WScript.Shell.Run`のwindowstyle=0）にラップしている。
@@ -89,7 +92,7 @@ Register-ScheduledTask -TaskName "APHRNTs100-PullBotDigest" -Action $action -Tri
 - **既に旧`pull-bot-digest-task.cmd`でタスクを登録している場合は、上記のコマンドで登録し直すこと**（`Register-ScheduledTask`に`-Force`を付けると同名タスクを上書きできる）。旧ラッパーは削除済みのため、差し替えないとトリガーのたびに失敗して定期同期が黙って止まる。
 - 前提条件（gcloud CLIの認証・VMへのSSH+sudo権限）は[README.mdの該当箇所](../README.md#本番vm運用時の注意npm-run-syncremote)を参照。
 - タスクの確認・削除: `Get-ScheduledTask -TaskName "APHRNTs100-PullBotDigest"` / `Unregister-ScheduledTask -TaskName "APHRNTs100-PullBotDigest" -Confirm:$false`。
-- 頻度（既定は毎日03:00 JST）はセンパイの運用に合わせて`-Daily -At`の時刻を変えてよい。より高頻度にしたい場合は`-Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 30) -RepetitionDuration (New-TimeSpan -Days 3650)`のような繰り返しトリガーへ戻すこともできる（`-RepetitionDuration`に`[TimeSpan]::MaxValue`を渡すと`P99999999DT23H59M59S`に展開されて範囲外エラーになるため、実質無期限として`-Days 3650`を指定する）。ただし相互同期は1回あたりのgcloud呼び出しが取得のみの頃より増える（ssh/scp計5回程度）ため、本番VM側のデプロイタイマー同様、間隔を短くしすぎると`gcloud compute ssh`のIAPトンネル確立が積み重なる。5分未満は避けること。
+- 頻度（既定は毎日03:00と10:00 JSTの2回）はセンパイの運用に合わせて`-Daily -At`の時刻を増減してよい（`$trigger`を配列にすればトリガーを複数持てる）。より高頻度にしたい場合は`-Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 30) -RepetitionDuration (New-TimeSpan -Days 3650)`のような繰り返しトリガーへ戻すこともできる（`-RepetitionDuration`に`[TimeSpan]::MaxValue`を渡すと`P99999999DT23H59M59S`に展開されて範囲外エラーになるため、実質無期限として`-Days 3650`を指定する）。ただし相互同期は1回あたりのgcloud呼び出しが取得のみの頃より増える（ssh/scp計5回程度）ため、本番VM側のデプロイタイマー同様、間隔を短くしすぎると`gcloud compute ssh`のIAPトンネル確立が積み重なる。5分未満は避けること。
 
 ## 相互同期（`npm run sync:remote`）の本番VM適用ランブック
 
