@@ -111,6 +111,20 @@ CREATE TABLE IF NOT EXISTS claude_session_notes (
   imported_at TEXT NOT NULL
 );
 
+-- Claude連携ブリッジ: logs/ の creative-log 区間（## 創作活動の進捗・## 取り組んだタスク）を
+-- 日付単位で構造化して取り込むテーブル。Claude側の記録が正（日付キーの上書きupsert・冪等）。
+-- 週次の振り返り・週間サマリーでBot側から創作活動の傾向を参照できるようにする。
+CREATE TABLE IF NOT EXISTS creative_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL,
+  date TEXT NOT NULL,
+  progress TEXT,             -- 「## 創作活動の進捗」の中身（Markdown）
+  tasks TEXT,                -- 「## 取り組んだタスク」の中身（Markdown）
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(user_id, date)
+);
+
 -- 気分の時点記録（瞬間値）。daily_checkins.mood は「一日の総括」、こちらは「その時点の気分」。
 -- 朝/昼/夜での気分の浮き沈み（推移）を総括と混同せずに残すためのテーブル。
 CREATE TABLE IF NOT EXISTS mood_events (
