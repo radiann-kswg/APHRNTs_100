@@ -2,8 +2,9 @@
 
 `logs/` に蓄積した生活管理ログ（体調・気分・服薬・睡眠・創作進捗など）を、期間指定でひとつのPDFにまとめて出力する機能です。通院時に主治医へ経過を見せる、週次・月次の振り返りを紙で読み返す、といった用途を想定しています。
 
-- 実装: [`scripts/export-logs-pdf.mjs`](../scripts/export-logs-pdf.mjs)（Node.js単体・**追加のnpm依存なし**）
+- 実装: [`scripts/export-logs-pdf.mjs`](../scripts/export-logs-pdf.mjs)（Node.js単体・**追加のnpm依存なし**。共通部品は [`scripts/lib/pdf-common.mjs`](../scripts/lib/pdf-common.mjs)）
 - PDF化にはChromium系ブラウザのヘッドレス印刷機能を使う。**Windowsでは標準搭載のMicrosoft Edgeを自動検出**するため、通常は何もインストール不要。
+- 週間（日曜〜土曜）の**傾向集計つきレポート**は後述の `npm run export:weekly-pdf` を使う。
 
 > ⚠ **出力PDFには機微な健康情報が含まれます。** 既定の出力先 `.cache/exports/` は `.gitignore` 済みでgitにはコミットされませんが、生成したPDFの共有・持ち出しは必ずセンパイ本人の判断で慎重に行ってください。
 
@@ -62,6 +63,57 @@ Claude Desktop（＋Desktop Commander MCP）を導入している場合、セン
 - 日次記録 `YYYY-MM-DD.md` を日付順に1セクションずつ（曜日つき見出し）
 - Health Sheet等のHTMLコメントマーカー（`<!-- health-sheet:... -->` 等）は出力から除去される（マーカー区間の中身は出力される）
 - `--include-weekly` 時は週間シート、`--include-digest` 時は `bot-digest.md` を末尾に付加
+
+## 週間レポートPDF（`npm run export:weekly-pdf`）
+
+日曜〜土曜の1週間ぶんの記録から、**傾向の機械集計＋（任意で）100(モモ)の所見文＋各日の記録本文**をひとつのPDFにまとめます。診察時に「この1週間どうだったか」をひと目で示す用途を想定しています。
+
+- 実装: [`scripts/export-weekly-pdf.mjs`](../scripts/export-weekly-pdf.mjs)（集計ロジックは [`scripts/lib/weekly-aggregate.mjs`](../scripts/lib/weekly-aggregate.mjs)・テストあり）
+
+```bash
+# 今日を含む週（日〜土）の週間レポート
+npm run export:weekly-pdf
+
+# 指定日を含む週（例: 2026-07-15を含む 07-12〜07-18）
+npm run export:weekly-pdf -- --week 2026-07-15
+
+# 100(モモ)が書いた週間所見（Markdown）を差し込む
+npm run export:weekly-pdf -- --week 2026-07-15 --summary-file .cache/momo-weekly-shoken.md
+
+# 集計サマリー＋所見だけの軽いPDF（各日の本文なし）
+npm run export:weekly-pdf -- --week 2026-07-15 --no-daily
+```
+
+出力先は既定で `.cache/exports/momo-weekly_<日曜>_<土曜>.pdf`。
+
+### 集計内容
+
+- 記録のある日数（N/7）
+- 気分・エネルギー（`N/10`）と眠りの質（`N/5`）の平均・最低・最高
+- 服薬スロット別（朝🌄・日中☀️・食後🍽・夜🌙）の達成率。**分母は報告があった日のみ**（`[x]`または`[ ]`。未記載の日は含めない）
+- 発作時⚡（頓服）の合計回数
+- 思考記録・行動活性化・感謝日記・創作進捗を書いた日数
+- 日ごとの一覧表（気分・エネルギー・眠り・起床時刻・服薬チェック）
+
+数値の読み取り書式は [logs/README.md](../logs/README.md) の正典に従い、連携ブリッジのパーサー（`src/bridge/checkin-importer.ts`・`src/bridge/medication-importer.ts`）と同じ読み方に揃えています。
+
+### 週間レポートのオプション一覧
+
+| オプション | 説明 |
+| --- | --- |
+| `--week YYYY-MM-DD` | この日を**含む**週（日曜はじまり）を対象にする（省略時: 今日を含む週） |
+| `--summary-file <path>` | 100(モモ)が書いた週間所見（Markdown）を「100(モモ)の所見」セクションとして差し込む |
+| `--no-daily` | 各日の記録本文を載せず、集計サマリー（＋所見）だけにする |
+| `--output <path>` | 出力PDFのパス（省略時: `.cache/exports/momo-weekly_<日曜>_<土曜>.pdf`） |
+| `--keep-html` / `--browser <path>` | `export:pdf` と同じ |
+
+### Claude Desktopからの利用（週間レポート）
+
+1. センパイ:「先週の週間レポートをPDFにして」のように依頼する。
+2. Claude（100(モモ)）は必要なら所見文（Markdown）を `.cache/` 配下に書き出してから、Desktop Commander MCP経由でリポジトリルートから `npm run export:weekly-pdf -- --week ... --summary-file ...` を実行する。
+3. 生成されたPDFのフルパスをセンパイに伝える。
+
+所見文はあくまで**経過の観察メモ**として書き、診断・断定はしない（[AGENTS.mdの安全指針](../AGENTS.md#生活管理cbtサポートの運用方針)に従う）。機微情報のため、センパイ本人の依頼以外でPDFを生成・共有しないことは `export:pdf` と同じ。
 
 ## トラブルシューティング
 

@@ -17,6 +17,7 @@
     "sync:push-remote": "tsx src/bridge/cli.ts push-remote",
     "sync:remote": "tsx src/bridge/cli.ts sync-remote",
     "export:pdf": "node scripts/export-logs-pdf.mjs",
+    "export:weekly-pdf": "node scripts/export-weekly-pdf.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
