@@ -136,6 +136,77 @@ describe("createReplayRunner", () => {
     expect(fetchCalls.filter((c) => c.kind === "chat")).toHaveLength(0);
   });
 
+  it("beginXxxで処理中の印を付けると、処理完了（markXxxProcessed）前でもreplayが二重処理しない", async () => {
+    // 二重応答バグの回帰テスト: ストリーム受信→AI応答生成中（数秒〜数十秒）の間に
+    // 定期replayが走ると、同じメッセージを二重処理して2回返信してしまっていた
+    const { runner, handled, stateStore } = setup({
+      chatsOnServer: [chat("b2")],
+    });
+    stateStore.set("replay_last_chat_id", "b1");
+
+    // ストリーム側が受信直後に印を付けた（まだ処理は完了していない）状態
+    expect(runner.beginChat("b2")).toBe(true);
+
+    const result = await runner.runReplay();
+
+    expect(result.chats).toBe(0);
+    expect(handled.chats).toHaveLength(0);
+  });
+
+  it("beginXxxは同じIDに対して2回目以降falseを返す（ストリームの二重配信も抑止する）", () => {
+    const { runner } = setup();
+    expect(runner.beginMention("a1")).toBe(true);
+    expect(runner.beginMention("a1")).toBe(false);
+    expect(runner.beginChat("b1")).toBe(true);
+    expect(runner.beginChat("b1")).toBe(false);
+  });
+
+  it("replayで処理済みのIDはbeginXxxがfalseを返す（replay直後のストリーム配信を抑止する）", async () => {
+    const { runner, handled, stateStore } = setup({
+      chatsOnServer: [chat("b2")],
+    });
+    stateStore.set("replay_last_chat_id", "b1");
+
+    const result = await runner.runReplay();
+    expect(result.chats).toBe(1);
+    expect(handled.chats.map((m) => m.id)).toEqual(["b2"]);
+
+    // replayが処理した直後に、同じメッセージがストリームで届いても処理しない
+    expect(runner.beginChat("b2")).toBe(false);
+  });
+
+  it("abortXxxで印を外すと、次回のreplayで再試行される", async () => {
+    const { runner, handled, stateStore } = setup({
+      chatsOnServer: [chat("b2")],
+    });
+    stateStore.set("replay_last_chat_id", "b1");
+
+    // ストリーム側で処理を始めたが失敗した（begin→abort）
+    expect(runner.beginChat("b2")).toBe(true);
+    runner.abortChat("b2");
+
+    const result = await runner.runReplay();
+    expect(result.chats).toBe(1);
+    expect(handled.chats.map((m) => m.id)).toEqual(["b2"]);
+  });
+
+  it("replayのハンドラが失敗したIDは印が外れ、次回のreplayで再試行できる（新API下でも維持）", async () => {
+    const failMentionIds = new Set(["a3"]);
+    const { runner, handled, stateStore } = setup({
+      mentionsOnServer: [mention("a3")],
+      failMentionIds,
+    });
+    stateStore.set("replay_last_mention_id", "a2");
+
+    await expect(runner.runReplay()).rejects.toThrow("handler failed for a3");
+    expect(handled.mentions).toHaveLength(0);
+
+    failMentionIds.clear();
+    const result = await runner.runReplay();
+    expect(result.mentions).toBe(1);
+    expect(handled.mentions.map((n) => n.id)).toEqual(["a3"]);
+  });
+
   it("ハンドラが失敗したメッセージは処理済みにせず、次回のreplayで再試行できる", async () => {
     const failMentionIds = new Set(["a3"]);
     const { runner, handled, stateStore } = setup({
