@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Database } from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { importCheckinFromLogs, parseCheckinLog } from "../../../src/bridge/checkin-importer.js";
+import { importCheckinFromLogs, parseCheckinLog, summarizeCreativeProgress } from "../../../src/bridge/checkin-importer.js";
 import { CheckinStore } from "../../../src/storage/checkin-store.js";
 import { openDatabase } from "../../../src/storage/db.js";
 
@@ -120,5 +120,89 @@ describe("importCheckinFromLogs", () => {
 
     expect(importCheckinFromLogs(logsDir, store, "", NOW).merged).toBe(0);
     expect(importCheckinFromLogs(join(logsDir, "missing"), store, "owner1", NOW).merged).toBe(0);
+  });
+});
+
+describe("summarizeCreativeProgress", () => {
+  it("strips the leading bullet and appends the count of remaining lines", () => {
+    const progress = "- CreationsDBの同期点検を実施\n- サイト整合性チェック\n- バックアップ実行";
+    expect(summarizeCreativeProgress(progress)).toBe("CreationsDBの同期点検を実施（他2件）");
+  });
+
+  it("returns a single line as-is (no count suffix)", () => {
+    expect(summarizeCreativeProgress("- キャラ設定の下書きを1件更新")).toBe("キャラ設定の下書きを1件更新");
+  });
+
+  it("truncates long first lines to 80 chars with an ellipsis", () => {
+    const long = `- ${"あ".repeat(100)}`;
+    const summary = summarizeCreativeProgress(long);
+    expect(summary).toBe(`${"あ".repeat(80)}…`);
+    expect(summary.length).toBe(81);
+  });
+});
+
+describe("importCheckinFromLogs (creative progress)", () => {
+  let db: Database;
+  let store: CheckinStore;
+  let logsDir: string;
+
+  /** creative-log マーカー区間つきの1日分ログ（数値チェックイン項目なし） */
+  function creativeDoc(progress = "- CreationsDBの同期点検を実施\n- バックアップ実行"): string {
+    return [
+      "# 2026-07-20（月）",
+      "",
+      "<!-- creative-log:start -->",
+      "## 創作活動の進捗",
+      "",
+      progress,
+      "",
+      "## 取り組んだタスク",
+      "",
+      "- GCP定期チェック",
+      "<!-- creative-log:end -->",
+    ].join("\n");
+  }
+
+  beforeEach(() => {
+    db = openDatabase(":memory:");
+    store = new CheckinStore(db);
+    logsDir = mkdtempSync(join(tmpdir(), "checkin-import-creative-"));
+  });
+
+  afterEach(() => {
+    rmSync(logsDir, { recursive: true, force: true });
+    db.close();
+  });
+
+  it("fills creative_progress with a one-line summary when the checkin slot is empty", () => {
+    writeFileSync(join(logsDir, "2026-07-20.md"), creativeDoc());
+
+    const result = importCheckinFromLogs(logsDir, store, "owner1", NOW);
+
+    expect(result.merged).toBe(1);
+    const row = store.get("owner1", "2026-07-20");
+    expect(row?.creative_progress).toBe("CreationsDBの同期点検を実施（他1件）");
+  });
+
+  it("never overwrites creative_progress already reported to the bot", () => {
+    store.upsert({ userId: "owner1", date: "2026-07-20", creativeProgress: "Misskeyで直接報告した進捗" }, NOW);
+    writeFileSync(join(logsDir, "2026-07-20.md"), creativeDoc());
+
+    const result = importCheckinFromLogs(logsDir, store, "owner1", NOW);
+
+    expect(result.merged).toBe(0);
+    expect(store.get("owner1", "2026-07-20")?.creative_progress).toBe("Misskeyで直接報告した進捗");
+  });
+
+  it("fills numeric fields and creative_progress together and stays idempotent", () => {
+    const doc = `${creativeDoc()}\n\n## 体調・気分\n\n気分: 7/10\n`;
+    writeFileSync(join(logsDir, "2026-07-20.md"), doc);
+
+    expect(importCheckinFromLogs(logsDir, store, "owner1", NOW).merged).toBe(1);
+    const row = store.get("owner1", "2026-07-20");
+    expect(row?.mood).toBe(7);
+    expect(row?.creative_progress).toBe("CreationsDBの同期点検を実施（他1件）");
+    // 2回目は全項目が埋まっているので何もしない
+    expect(importCheckinFromLogs(logsDir, store, "owner1", NOW).merged).toBe(0);
   });
 });
