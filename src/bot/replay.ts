@@ -36,6 +36,22 @@ export interface ReplayResult {
 }
 
 export interface ReplayRunner {
+  /**
+   * ストリーム経由でメンションの処理を**始める前**に呼ぶ。
+   * まだ誰も処理していなければ「処理中」として印を付けて true を返す。
+   * 既にreplay側で処理中・処理済み（または二重配信）の場合は false を返すので、
+   * 呼び出し側は処理をスキップすること（応答の二重送信を防ぐ）。
+   */
+  beginMention(id: string): boolean;
+  /** ストリーム経由で一対一チャットの処理を始める前に呼ぶ（詳細は beginMention と同じ） */
+  beginChat(id: string): boolean;
+  /**
+   * beginMention で付けた「処理中」の印を取り消す（ハンドラが失敗したときに呼ぶ）。
+   * 印を外すことで、次回のreplayが同じメッセージを再試行できる。
+   */
+  abortMention(id: string): void;
+  /** beginChat で付けた「処理中」の印を取り消す（詳細は abortMention と同じ） */
+  abortChat(id: string): void;
   /** ストリーム経由でメンションを処理し終えたら呼ぶ（replayとの二重処理を防ぐ） */
   markMentionProcessed(id: string): void;
   /** ストリーム経由で一対一チャットを処理し終えたら呼ぶ */
@@ -47,7 +63,7 @@ export interface ReplayRunner {
   runReplay(): Promise<ReplayResult>;
 }
 
-/** 直近に処理したIDの集合（上限付き・挿入順で古いものから捨てる） */
+/** 直近に処理した（または処理中の）IDの集合（上限付き・挿入順で古いものから捨てる） */
 class RecentIdSet {
   private readonly ids = new Set<string>();
   private readonly order: string[] = [];
@@ -65,6 +81,20 @@ class RecentIdSet {
       if (oldest !== undefined) this.ids.delete(oldest);
     }
   }
+
+  /** まだ含まれていなければ追加して true、既に含まれていれば false（check-and-addを1操作で行う） */
+  tryAdd(id: string): boolean {
+    if (this.ids.has(id)) return false;
+    this.add(id);
+    return true;
+  }
+
+  /** 処理に失敗したIDの印を外す（次回のreplayで再試行できるようにする） */
+  delete(id: string): void {
+    if (!this.ids.delete(id)) return;
+    const index = this.order.indexOf(id);
+    if (index !== -1) this.order.splice(index, 1);
+  }
 }
 
 function maxId(current: string | null, candidate: string): string {
@@ -79,12 +109,21 @@ function sortByIdAscending<T extends { id: string }>(items: T[]): T[] {
  * WS切断中のメッセージ取りこぼしを再接続時に回収する「replay」ランナー。
  *
  * 仕組み:
- * - ストリームで処理するたびに markXxxProcessed() で「処理済みの最終ID」をbot_stateへ永続化する。
+ * - ストリームで処理を**始める前**に beginXxx() で「処理中」の印を付け、処理を終えたら
+ *   markXxxProcessed() で「処理済みの最終ID」をbot_stateへ永続化する（失敗時は abortXxx() で印を外す）。
  * - 再接続時に runReplay() がREST API（notes/mentions・chat/messages/user-timeline）で
  *   最終ID以降のメッセージを取得し、未処理ぶんだけを通常のハンドラへ流す。
  * - 初回起動（最終IDが未記録）のときは、過去のメンションへ遡って応答しないよう
  *   ベースライン（現時点の最新ID）だけを記録して何も処理しない。
  * - ハンドラが失敗したメッセージは処理済みにせず中断する（次回のreplayで再試行される）。
+ *
+ * 二重応答の防止（beginXxx が必要な理由）:
+ * ストリーム処理はAI応答の生成に数秒〜数十秒かかるため、「受信したがまだ
+ * markXxxProcessed されていない」時間窓が生まれる。この窓の間に定期replayが走ると、
+ * 同じメッセージをREST APIから拾って二重に応答してしまう（実際に一対一チャットで
+ * 同じ発言へ2回返信する不具合が起きた）。処理の**開始時点**で印を付けることでこの
+ * 競合を塞ぐ。逆にreplay側も、処理開始前に印を付けるため、replay処理中に同じ
+ * メッセージがストリームで届いても二重処理にならない。
  */
 export function createReplayRunner(deps: ReplayRunnerDeps): ReplayRunner {
   const recentMentionIds = new RecentIdSet();
@@ -112,8 +151,16 @@ export function createReplayRunner(deps: ReplayRunnerDeps): ReplayRunner {
     }
     let processed = 0;
     for (const note of fetched) {
-      if (note.id <= lastId || recentMentionIds.has(note.id)) continue;
-      await deps.onMention(note);
+      if (note.id <= lastId) continue;
+      // 処理の開始時点で印を付ける（ストリーム側で処理中・処理済みならスキップ）
+      if (!recentMentionIds.tryAdd(note.id)) continue;
+      try {
+        await deps.onMention(note);
+      } catch (error) {
+        // 失敗したら印を外して中断する（次回のreplayで再試行できるように）
+        recentMentionIds.delete(note.id);
+        throw error;
+      }
       markMentionProcessed(note.id);
       processed += 1;
     }
@@ -131,8 +178,16 @@ export function createReplayRunner(deps: ReplayRunnerDeps): ReplayRunner {
     }
     let processed = 0;
     for (const message of fetched) {
-      if (message.id <= lastId || recentChatIds.has(message.id)) continue;
-      await deps.onChatMessage(message);
+      if (message.id <= lastId) continue;
+      // 処理の開始時点で印を付ける（ストリーム側で処理中・処理済みならスキップ）
+      if (!recentChatIds.tryAdd(message.id)) continue;
+      try {
+        await deps.onChatMessage(message);
+      } catch (error) {
+        // 失敗したら印を外して中断する（次回のreplayで再試行できるように）
+        recentChatIds.delete(message.id);
+        throw error;
+      }
       markChatProcessed(message.id);
       processed += 1;
     }
@@ -151,5 +206,13 @@ export function createReplayRunner(deps: ReplayRunnerDeps): ReplayRunner {
     }
   }
 
-  return { markMentionProcessed, markChatProcessed, runReplay };
+  return {
+    beginMention: (id) => recentMentionIds.tryAdd(id),
+    beginChat: (id) => recentChatIds.tryAdd(id),
+    abortMention: (id) => recentMentionIds.delete(id),
+    abortChat: (id) => recentChatIds.delete(id),
+    markMentionProcessed,
+    markChatProcessed,
+    runReplay,
+  };
 }

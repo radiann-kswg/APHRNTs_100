@@ -158,20 +158,31 @@ async function main(): Promise<void> {
 
   misskeyClient.connect(
     (note) => {
+      // 処理の開始時点で「処理中」の印を付ける。付けられなければreplay側で処理中・処理済み
+      // （または二重配信）なのでスキップし、同じメンションへの二重応答を防ぐ
+      if (!replay.beginMention(note.id)) {
+        return;
+      }
       onMention(note)
         .then(() => {
           replay.markMentionProcessed(note.id);
         })
         .catch((error: unknown) => {
+          // 失敗時は印を外し、次回のreplayで再試行できるようにする
+          replay.abortMention(note.id);
           logger.error("mention処理でエラーが発生した", error);
         });
     },
     (message) => {
+      if (!replay.beginChat(message.id)) {
+        return;
+      }
       onChatMessage(message)
         .then(() => {
           replay.markChatProcessed(message.id);
         })
         .catch((error: unknown) => {
+          replay.abortChat(message.id);
           logger.error("一対一チャット処理でエラーが発生した", error);
         });
     },
