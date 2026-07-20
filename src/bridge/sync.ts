@@ -31,7 +31,7 @@ export interface BridgeSyncDeps {
 export interface ImportSummary extends ImportResult {
   /** 服薬チェックをbot DBへ逆マージした日数（ownerUserId 未設定時は常に0） */
   medicationMerged: number;
-  /** 気分・活力・眠りの質の空きをbot DBへ補完した日数（ownerUserId 未設定時は常に0・非破壊） */
+  /** 気分・活力・眠りの質・創作進捗要約の空きをbot DBへ補完した日数（ownerUserId 未設定時は常に0・非破壊） */
   checkinMerged: number;
   /** CBT記録（思考記録・行動活性化・感謝日記）をbot DBへ逆マージした日数の合計（同上・非破壊） */
   cbtMerged: number;
@@ -48,7 +48,7 @@ export interface BridgeSyncResult {
  * Claude→Bot（logs/取り込み）のみを実行する。
  * セッション記録の取り込みに加えて、ownerUserId が設定されていれば次の逆マージを行う:
  * - 「## 服薬」のチェック済みスロットを medication_logs へ（Claude/Health Sheet側を正とする）。
- * - 「気分: N/10」・エネルギー・眠りの質を daily_checkins の**空き項目だけ**へ（非破壊で補完）。
+ * - 「気分: N/10」・エネルギー・眠りの質・創作進捗の1行要約を daily_checkins の**空き項目だけ**へ（非破壊で補完）。
  * - 「## 思考記録」「## 行動活性化」「## 感謝日記」を各テーブルへ（Bot側に同じ日の記録が
  *   無い日だけ・非破壊）。
  * - creative-log 区間（「## 創作活動の進捗」「## 取り組んだタスク」）を creative_logs へ
