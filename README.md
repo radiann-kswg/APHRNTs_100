@@ -86,7 +86,7 @@ Claude (Desktop/Code)                     Misskey Bot (src/)
 ```bash
 # ローカル内で完結する同期（logs/ ⇄ ローカルの .cache/session.db）
 npm run sync             # 双方向同期（logs/取り込み → bot-digest.md書き出し）を手動実行
-npm run sync:import      # Claude→Bot のみ（logs/*.md をSQLiteへ取り込み。服薬の逆マージ含む・下記参照）
+npm run sync:import      # Claude→Bot のみ（logs/*.md をSQLiteへ取り込み。服薬・チェックイン・CBT記録・創作進捗の逆マージ含む・下記参照）
 npm run sync:export      # Bot→Claude のみ（SQLite記録を logs/bot-digest.md へ出力）
 
 # 本番VM（GCE）との同期（下記「本番VM運用時の注意」参照）
@@ -127,13 +127,16 @@ npm run sync:remote   # 下記3つをこの順で実行（通常はこれ1本で
 | Claude→Bot対象 | `logs/` 直下の `YYYY-MM-DD.md`（`README.md`・`bot-digest.md` 等は対象外、空ファイルはスキップ） |
 | 取り込み先 | SQLite `claude_session_notes` テーブル（日付をキーに上書き） |
 | 服薬の逆マージ | `BOT_OWNER_USER_ID` 設定時、「## 服薬」のチェック済み（`[x]`）スロットと発作時⚡の記述を `medication_logs` へ上書き（未チェック・記載なしは不変・冪等） |
+| チェックインの逆マージ | `BOT_OWNER_USER_ID` 設定時、「気分: N/10」・エネルギー・眠りの質を `daily_checkins` の**空き項目だけ**へ補完（非破壊・冪等） |
+| CBT記録の逆マージ | `BOT_OWNER_USER_ID` 設定時、「## 思考記録」「## 行動活性化」「## 感謝日記」を `thought_records` / `behavioral_activation_logs` / `gratitude_logs` へ取り込み。**Bot側に同じ日（JST）の記録が無い日だけ**の非破壊マージ・冪等（取り込んだ記録の`created_at`はその日の正午JST固定） |
+| 創作進捗の取り込み | `BOT_OWNER_USER_ID` 設定時、creative-log区間（「## 創作活動の進捗」「## 取り組んだタスク」）を `creative_logs` へ日付キーで上書き（Claude側が正・冪等） |
 | プロンプト注入 | 直近**7日**分・1日あたり最大**2,000字**（超過分は省略）。記録が無い日はセクション自体を注入しない |
 | Bot→Claude出力 | `logs/bot-digest.md`（**自動生成・手動編集禁止**。同期のたびに直近**14日（既定、`BOT_DIGEST_DAYS`で変更可）**分で上書き） |
 | 同期タイミング | Bot/dev-cli起動時、各メッセージ処理の前（import）と後（export）、および手動の `npm run sync` |
 | 設定 | `.env` の `CLAUDE_SYNC_ENABLED`（既定 `true`）／ `CLAUDE_LOGS_DIR`（既定 `logs`）／ `BOT_DIGEST_PATH`（既定 `logs/bot-digest.md`）／ `BOT_DIGEST_DAYS`（既定 `14`）／ `BOT_OWNER_USER_ID` |
 | ダイジェストの一時延長 | `npm run sync:export -- --days=31` のように実行すると、`BOT_DIGEST_DAYS`を変えずにその場限りで対象日数を上書きできる（月次振り返りの準備等） |
 | ローカル⇄VMの相互同期 | `npm run sync:remote`（`npm run sync:push-remote` → VM側のダイジェスト再生成 → `npm run sync:pull-remote`。`gcloud compute ssh` / `scp`経由。本番VM運用時のみ必要。上記「本番VM運用時の注意」参照） |
-| 実装 | [`src/bridge/`](./src/bridge/)（`log-importer` / `medication-importer` / `digest-exporter` / `notes-section` / `sync` / `runtime` / `cli` / `remote-common` / `remote-pull` / `remote-push` / `remote-sync`） |
+| 実装 | [`src/bridge/`](./src/bridge/)（`log-importer` / `medication-importer` / `checkin-importer` / `cbt-importer` / `creative-log-importer` / `digest-exporter` / `notes-section` / `sync` / `runtime` / `cli` / `remote-common` / `remote-pull` / `remote-push` / `remote-sync`） |
 
 ### 複数ユーザー運用時のプライバシー（`BOT_OWNER_USER_ID`）
 

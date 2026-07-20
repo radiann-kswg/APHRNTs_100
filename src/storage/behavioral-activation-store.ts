@@ -55,4 +55,14 @@ export class BehavioralActivationStore {
       .prepare("SELECT * FROM behavioral_activation_logs WHERE user_id = ? AND created_at >= ? ORDER BY created_at ASC")
       .all(userId, sinceIso) as ActivityRow[];
   }
+
+  /** 指定期間 [fromIso, toIso) に記録が1件でもあるか（連携ブリッジの重複取り込み防止に使う） */
+  hasAnyBetween(userId: string, fromIso: string, toIso: string): boolean {
+    const row = this.db
+      .prepare(
+        "SELECT 1 FROM behavioral_activation_logs WHERE user_id = ? AND created_at >= ? AND created_at < ? LIMIT 1",
+      )
+      .get(userId, fromIso, toIso);
+    return row !== undefined;
+  }
 }
