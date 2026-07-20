@@ -92,7 +92,7 @@ Claude Desktopのライブアーティファクト「Health Sheet」は、「log
 ```
 
 - 各スロット（朝🌄・日中☀️・食後🍽・夜🌙）は `[x]` で服用済み、`[ ]` で未服用、スロット自体を書かなければ「未報告」として扱われる（未服用と未報告は区別される）。
-- 「発作時⚡」には頓服の回数・きっかけ・効き具合などを自由記述してよい。
+- 「発作時⚡」には飓服の回数・きっかけ・効き具合などを自由記述してよい。
 - Misskey Botの`save_medication`ツールで保存された内容は`logs/bot-digest.md`の「## 服薬記録」セクションに反映されるため、`logs/*.md`側に必ず書く必要はない（気分の数値記録と同様、両方が独立した経路として併存する）。
 
 ## 任意セクション（CBTセルフケア機能を使った場合のみ）
@@ -110,3 +110,7 @@ Claude Desktopのライブアーティファクト「Health Sheet」は、「log
 - 「思考記録」には[.cbt-datas/thought-record.md](../.cbt-datas/thought-record.md)の7ステップの要点を簡潔にまとめる。
 - 「行動活性化」には[.cbt-datas/behavioral-activation.md](../.cbt-datas/behavioral-activation.md)の計画内容と（あれば）実施後の振り返りを記す。
 - 「感謝日記」には[.cbt-datas/gratitude.md](../.cbt-datas/gratitude.md)で挙げた3つの良かったことを記す。
+
+## 記録のPDF出力
+
+`logs/` の記録は `npm run export:pdf -- --from YYYY-MM-DD --to YYYY-MM-DD` で、期間指定のひとつのPDF（既定の出力先: `.cache/exports/`・git管理外）にまとめて出力できる。通院時に経過を見せる・振り返りを紙で読み返す等の用途を想定。Claude Desktop導入環境ではチャットで「100(モモ)」に頼むだけで生成できる。詳細は [../docs/logs-pdf-export.md](../docs/logs-pdf-export.md) を参照。
