@@ -26,11 +26,14 @@ import { SessionStore } from "./storage/session-store.js";
 import { ThoughtRecordStore } from "./storage/thought-record-store.js";
 import { createHeartbeatWriter } from "./utils/heartbeat.js";
 import { createLogger } from "./utils/logger.js";
+import { notifyRecoveryIfLongDowntime, readPreviousHeartbeatTs } from "./utils/recovery-notice.js";
 
 async function main(): Promise<void> {
   const env = loadEnv();
   const logger = createLogger(env.LOG_LEVEL);
   const startedAt = new Date().toISOString();
+  // 復帰報告用: heartbeat writer が上書きする前に、前回プロセスの最終heartbeat時刻を控えておく
+  const previousHeartbeatTs = readPreviousHeartbeatTs(env.HEARTBEAT_PATH);
   const db = openDatabase(env.DB_PATH);
 
   const sessionStore = new SessionStore(db);
@@ -188,6 +191,16 @@ async function main(): Promise<void> {
     },
   );
   logger.info("Misskeyへの接続を開始した。");
+
+  // 復帰報告: 長時間ダウン（VM停止・フリーズ等でwatchdog通知が飛ばないケース）からの復帰を
+  // オーナーへ一言報告する。REST API経由なのでWS接続の確立は待たない。失敗しても起動は継続する。
+  void notifyRecoveryIfLongDowntime({
+    previousTs: previousHeartbeatTs,
+    thresholdMs: env.RECOVERY_NOTICE_THRESHOLD_MS,
+    ownerUserId: env.BOT_OWNER_USER_ID,
+    sendChatMessage: (toUserId, text) => misskeyClient.sendChatMessage(toUserId, text),
+    logger,
+  });
 
   const heartbeat = createHeartbeatWriter(env.HEARTBEAT_PATH, env.HEARTBEAT_INTERVAL_MS, () => ({
     wsConnected,
