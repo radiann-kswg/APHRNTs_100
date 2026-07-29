@@ -85,6 +85,7 @@ async function main(): Promise<void> {
     safetyIncidentStore,
     toolHandlerDeps: { checkinStore, thoughtRecordStore, gratitudeStore, activationStore, medicationStore, moodEventStore },
     now: () => new Date(),
+    logger,
   });
   if (bridge) {
     handleMessage = bridge.wrapHandler(handleMessage, (error) => {
