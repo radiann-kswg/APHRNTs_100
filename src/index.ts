@@ -9,7 +9,11 @@ import { createBridgeRuntime } from "./bridge/runtime.js";
 import { RateLimiter } from "./bot/ratelimit/index.js";
 import { loadEnv } from "./config/env.js";
 import { MisskeyClient } from "./misskey/client.js";
-import { createDailyReflectionTask, createWeeklySummaryTask } from "./scheduler/index.js";
+import {
+  createDailyMorningReminderTask,
+  createDailyReflectionTask,
+  createWeeklySummaryTask,
+} from "./scheduler/index.js";
 import { createMedicationReminderTask } from "./scheduler/med-reminder-task.js";
 import { TaskScheduler } from "./scheduler/task-scheduler.js";
 import { createTrendNudgeTask } from "./scheduler/trend-nudge-task.js";
@@ -247,6 +251,17 @@ async function main(): Promise<void> {
       misskeyClient,
       hour: env.DAILY_REFLECTION_HOUR,
     }),
+    // 朝の記録リマインド。DAILY_MORNING_REMINDER_HOUR が空（null）なら登録しない。
+    ...(env.DAILY_MORNING_REMINDER_HOUR === null
+      ? []
+      : [
+          createDailyMorningReminderTask({
+            botStateStore,
+            sessionStore,
+            misskeyClient,
+            hour: env.DAILY_MORNING_REMINDER_HOUR,
+          }),
+        ]),
     createTrendNudgeTask({
       botStateStore,
       sessionStore,
