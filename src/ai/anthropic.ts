@@ -5,8 +5,8 @@ import type { AIProvider, GenerateReplyParams, GenerateReplyResult, ToolInvocati
 const MAX_TOOL_TURNS = 5;
 const MAX_TOKENS = 1024;
 
-export function createAnthropicProvider(apiKey: string, model?: string): AIProvider {
-  const client = new Anthropic({ apiKey });
+export function createAnthropicProvider(apiKey: string, model?: string, clientOverride?: Anthropic): AIProvider {
+  const client = clientOverride ?? new Anthropic({ apiKey });
   const resolvedModel = model && model.length > 0 ? model : DEFAULT_ANTHROPIC_MODEL;
 
   return {
@@ -65,6 +65,32 @@ export function createAnthropicProvider(apiKey: string, model?: string): AIProvi
           });
         }
         conversation.push({ role: "user", content: toolResultContent });
+      }
+
+      // 締めのテキストが空のままループを抜けた場合（ツールターン上限で打ち切られた、
+      // または最終応答がtool_use/空テキストのみだった場合）、そのまま返すと呼び出し側で
+      // 「無言の正常終了」となり返信が送られない（実際に一対一チャットで返信が来ない
+      // 不具合の原因になった）。ツールを外した追加リクエストを1回だけ行い、
+      // 記録内容を踏まえた締めの一言を必ず生成する。
+      if (finalText.length === 0 && toolInvocations.length > 0) {
+        const wrapUp = await client.messages.create(
+          {
+            model: resolvedModel,
+            max_tokens: MAX_TOKENS,
+            system: systemPrompt,
+            messages: conversation,
+            // 履歴にtool_use/tool_resultブロックが含まれるためtools自体は渡す必要があるが、
+            // これ以上のツール呼び出しはさせず、テキスト生成に専念させる
+            tools: anthropicTools.length > 0 ? anthropicTools : undefined,
+            tool_choice: anthropicTools.length > 0 ? { type: "none" } : undefined,
+          },
+          { timeout: AI_REQUEST_TIMEOUT_MS },
+        );
+        finalText = wrapUp.content
+          .filter((block): block is Anthropic.TextBlock => block.type === "text")
+          .map((block) => block.text)
+          .join("\n")
+          .trim();
       }
 
       return { text: finalText, toolInvocations };

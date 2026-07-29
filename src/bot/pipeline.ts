@@ -8,6 +8,12 @@ import { createToolExecutor, type ToolHandlerDeps } from "./tools/handlers.js";
 
 export type Channel = "misskey" | "misskey-chat" | "cli";
 
+/** pipelineが使うロガーの最小インターフェース（src/utils/logger.ts の Logger と互換）。 */
+export interface PipelineLogger {
+  warn(message: string, ...args: unknown[]): void;
+  info(message: string, ...args: unknown[]): void;
+}
+
 export interface PipelineDeps {
   aiProvider: AIProvider;
   /**
@@ -24,6 +30,11 @@ export interface PipelineDeps {
   safetyIncidentStore: SafetyIncidentStore;
   toolHandlerDeps: ToolHandlerDeps;
   now: () => Date;
+  /**
+   * 省略可。指定すると、レートリミットによる抑制と空応答フォールバックの発生を記録する。
+   * 「無言の正常終了」が起きたときに原因をログから追えるようにするためのもの。
+   */
+  logger?: PipelineLogger;
 }
 
 export interface HandleMessageResult {
@@ -51,6 +62,10 @@ export function createMessagePipeline(deps: PipelineDeps): MessageHandler {
     const lastInteractionAt = deps.sessionStore.getLastInteractionAt(userId);
     const decision = deps.rateLimiter.check(userId, lastInteractionAt, now);
     if (!decision.allowed) {
+      // 抑制は仕様どおりの挙動だが、外から見ると「返信が来ない」ため必ずログに残す
+      deps.logger?.info(
+        `レートリミットにより応答を抑制した（reason=${decision.reason ?? "unknown"}, channel=${channel}）`,
+      );
       return { replyText: "", suppressed: true };
     }
 
@@ -68,9 +83,23 @@ export function createMessagePipeline(deps: PipelineDeps): MessageHandler {
       executeTool,
     });
 
-    deps.sessionStore.appendExchange(userId, text, result.text, now);
+    // 4. 空応答の安全網: AIProviderが空テキストを返すと、呼び出し側（chat/mentionハンドラ）は
+    //    送信をスキップし、メッセージは処理済み扱いになって再試行もされない（＝返信が永遠に
+    //    来ない）。ここで定型文にフォールバックし、無言の正常終了を根絶する。
+    let replyText = result.text;
+    if (replyText.length === 0) {
+      deps.logger?.warn(
+        `AIProviderが空の応答を返したためフォールバック文を使う（channel=${channel}, toolInvocations=${result.toolInvocations.length}）`,
+      );
+      replyText =
+        result.toolInvocations.length > 0
+          ? "記録は済ませたぞ、センパイ。……すまない、返事の文章がうまく出てこなかった。内容は確かに受け取ってるから、安心してくれ。"
+          : "すまない、センパイ。返事の生成にしくじったみたいだ。もう一度話しかけてくれると助かる。";
+    }
+
+    deps.sessionStore.appendExchange(userId, text, replyText, now);
     deps.rateLimiter.recordReply(userId, decision.exempt, now);
 
-    return { replyText: result.text, suppressed: false };
+    return { replyText, suppressed: false };
   };
 }
