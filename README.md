@@ -24,6 +24,7 @@
 - 記録はMisskeyのユーザーIDごとに分離して保存され、他のユーザーの会話に混ざることはありません。
 - 連投を防ぐため、返信にはクールダウン（既定30分。会話が続いている間は緩和）があります。
 - 毎日20時（既定、`DAILY_REFLECTION_HOUR`で変更可）に、その日の振り返りを促すリマインドが一対一チャットで届きます。
+- 毎朝8時（既定、`DAILY_MORNING_REMINDER_HOUR`で変更可・空にすると無効）に、朝の体調・気分・朝の服薬・今日の予定の記録を促すリマインドが一対一チャットで届きます。
 - 毎日18時（既定、`MED_REMINDER_HOUR`で変更可）に、その日の夜🌙の服薬がまだ記録されていない場合だけ、服薬リマインドが一対一チャットで届きます（服用済みの記録があれば送られません）。
 - Misskeyの公開メンションは半公開の場です。**見られたくない内容は公開の場に書かない**よう気をつけてください。込み入った相談になってきた場合、Botの方から一対一チャットへの移行をそっと提案することがあります。
 
@@ -86,7 +87,7 @@ Claude (Desktop/Code)                     Misskey Bot (src/)
 ```bash
 # ローカル内で完結する同期（logs/ ⇄ ローカルの .cache/session.db）
 npm run sync             # 双方向同期（logs/取り込み → bot-digest.md書き出し）を手動実行
-npm run sync:import      # Claude→Bot のみ（logs/*.md をSQLiteへ取り込み。服薬の逆マージ含む・下記参照）
+npm run sync:import      # Claude→Bot のみ（logs/*.md をSQLiteへ取り込み。服薬・チェックイン・CBT記録・創作進捗の逆マージ含む・下記参照）
 npm run sync:export      # Bot→Claude のみ（SQLite記録を logs/bot-digest.md へ出力）
 
 # 本番VM（GCE）との同期（下記「本番VM運用時の注意」参照）
@@ -127,13 +128,16 @@ npm run sync:remote   # 下記3つをこの順で実行（通常はこれ1本で
 | Claude→Bot対象 | `logs/` 直下の `YYYY-MM-DD.md`（`README.md`・`bot-digest.md` 等は対象外、空ファイルはスキップ） |
 | 取り込み先 | SQLite `claude_session_notes` テーブル（日付をキーに上書き） |
 | 服薬の逆マージ | `BOT_OWNER_USER_ID` 設定時、「## 服薬」のチェック済み（`[x]`）スロットと発作時⚡の記述を `medication_logs` へ上書き（未チェック・記載なしは不変・冪等） |
+| チェックインの逆マージ | `BOT_OWNER_USER_ID` 設定時、「気分: N/10」・エネルギー・眠りの質を `daily_checkins` の**空き項目だけ**へ補完（非破壊・冪等） |
+| CBT記録の逆マージ | `BOT_OWNER_USER_ID` 設定時、「## 思考記録」「## 行動活性化」「## 感謝日記」を `thought_records` / `behavioral_activation_logs` / `gratitude_logs` へ取り込み。**Bot側に同じ日（JST）の記録が無い日だけ**の非破壊マージ・冪等（取り込んだ記録の`created_at`はその日の正午JST固定） |
+| 創作進捗の取り込み | `BOT_OWNER_USER_ID` 設定時、creative-log区間（「## 創作活動の進捗」「## 取り組んだタスク」）を `creative_logs` へ日付キーで上書き（Claude側が正・冪等） |
 | プロンプト注入 | 直近**7日**分・1日あたり最大**2,000字**（超過分は省略）。記録が無い日はセクション自体を注入しない |
 | Bot→Claude出力 | `logs/bot-digest.md`（**自動生成・手動編集禁止**。同期のたびに直近**14日（既定、`BOT_DIGEST_DAYS`で変更可）**分で上書き） |
 | 同期タイミング | Bot/dev-cli起動時、各メッセージ処理の前（import）と後（export）、および手動の `npm run sync` |
 | 設定 | `.env` の `CLAUDE_SYNC_ENABLED`（既定 `true`）／ `CLAUDE_LOGS_DIR`（既定 `logs`）／ `BOT_DIGEST_PATH`（既定 `logs/bot-digest.md`）／ `BOT_DIGEST_DAYS`（既定 `14`）／ `BOT_OWNER_USER_ID` |
 | ダイジェストの一時延長 | `npm run sync:export -- --days=31` のように実行すると、`BOT_DIGEST_DAYS`を変えずにその場限りで対象日数を上書きできる（月次振り返りの準備等） |
 | ローカル⇄VMの相互同期 | `npm run sync:remote`（`npm run sync:push-remote` → VM側のダイジェスト再生成 → `npm run sync:pull-remote`。`gcloud compute ssh` / `scp`経由。本番VM運用時のみ必要。上記「本番VM運用時の注意」参照） |
-| 実装 | [`src/bridge/`](./src/bridge/)（`log-importer` / `medication-importer` / `digest-exporter` / `notes-section` / `sync` / `runtime` / `cli` / `remote-common` / `remote-pull` / `remote-push` / `remote-sync`） |
+| 実装 | [`src/bridge/`](./src/bridge/)（`log-importer` / `medication-importer` / `checkin-importer` / `cbt-importer` / `creative-log-importer` / `digest-exporter` / `notes-section` / `sync` / `runtime` / `cli` / `remote-common` / `remote-pull` / `remote-push` / `remote-sync`） |
 
 ### 複数ユーザー運用時のプライバシー（`BOT_OWNER_USER_ID`）
 
@@ -178,6 +182,68 @@ npm run typecheck       # 型チェックのみ
 
 - Misskeyストリームは、アイドル切断を防ぐkeepalive（定期ping・`MISSKEY_PING_INTERVAL_MS`で調整可）と、指数バックオフ＋ジッタによる自前の自動再接続で維持します（数分おきの切断＝フラッピング対策。設計は[deploy/README.md](./deploy/README.md#misskeyストリームの接続維持keepalive自動再接続)を参照）。
 - メンション/一対一チャットの取りこぼし回収（replay）は、再接続時だけでなく`REPLAY_INTERVAL_MS`（既定60秒）ごとに定期実行し、REST APIで未処理分を拾い直します。keepaliveで接続が安定して再接続が起きなくなっても取りこぼしを回収でき、ライブ受信（特に一対一チャット）が未達でもこの間隔内で応答できます。
+
+## 技術構成
+
+このリポジトリを**個人開発の実績として見る場合**の概要です。利用方法だけを知りたい場合は読み飛ばして構いません。
+
+### 規模（2026-07-28時点・`develop`ブランチ実測）
+
+| 区分 | ファイル数 | 行数 |
+| --- | --- | --- |
+| `src/`（実装・TypeScript） | 59 | 約5,200行 |
+| `test/`（vitest・ユニット42 / 結合4） | 46 | 約4,200行 |
+| `scripts/`（運用ツール・Node.js） | — | 約1,100行 |
+
+実装に対してテストが約8割の行数を占めます。AI支援で書いたコードを**そのまま信用せず、テストで検証してから通す**方針を取っているためです。
+
+### 主要な設計
+
+| 領域 | 内容 |
+| --- | --- |
+| マルチLLM抽象化 | Anthropic / OpenAI / Gemini を共通インタフェース（[`src/ai/provider.ts`](./src/ai/provider.ts)）で切り替え。特定ベンダーに固定しない |
+| Tool use対応の会話パイプライン | [`src/bot/tools/`](./src/bot/tools/) でLLMからのツール呼び出しを受け、構造化データとしてSQLiteへ記録。結合テストあり |
+| 永続化層 | [`src/storage/`](./src/storage/) に12ストア＋スキーマ定義（`schema.sql`）。全ストアにユニットテスト |
+| 双方向同期ブリッジ | [`src/bridge/`](./src/bridge/) でMarkdownログ ⇄ SQLite を相互変換。テキストのマーカー区間だけを置換し、手書き内容を壊さない設計 |
+| スケジューラ | [`src/scheduler/`](./src/scheduler/) で服薬リマインド・傾向ナッジ・週次サマリを定期実行（JSTの時刻ゲート付き） |
+| 接続の堅牢化 | WebSocket keepalive、指数バックオフ＋ジッタの自動再接続、取りこぼし回収（replay）の定期実行 |
+| 安全設計 | 危機検知（[`src/bot/safety/crisis-detector.ts`](./src/bot/safety/crisis-detector.ts)）とセーフティポリシー、レート制限。結合テストで経路を検証 |
+| 本番運用 | GCE VM上のsystemd常駐、`master`マージ後の自動デプロイ、3層ウォッチドッグ（systemd / VM内 / Cloud Run functions + Cloud Scheduler）。詳細は[deploy/README.md](./deploy/README.md) |
+
+### 機微情報を公開しない設計
+
+健康記録を扱うため、**データそのものは1件もリポジトリに含めていません。**
+
+- `logs/*.md`（記録の実体）は`.gitignore`で除外。git管理下にあるのは書式を定義した[`logs/README.md`](./logs/README.md)のみ。
+- `.env` / `.private/` / `.cache/` も除外し、`.env.example`だけを公開。
+- 複数ユーザー運用時は`BOT_OWNER_USER_ID`で記録の混線を防ぐ（上記「複数ユーザー運用時のプライバシー」参照）。
+
+公開しているのは**記録の形式と仕組み**であり、記録の中身ではありません。
+
+## AI協働開発の内訳
+
+VS Code ＋ AIエージェント（Claude Desktop / Claude Code / GitHub Copilot / GPT Codex）で開発しています。「どこまでAIに任せ、どこを自分で決めたか」を明示します。
+
+### AIに任せた部分
+
+- 定型的な実装の下書き（ストア層のCRUD、型定義、テストケースの列挙）
+- リファクタリングの機械的な適用、命名の一括変更
+- ドキュメントの文面整形、表組みの生成
+- エラーメッセージやログ出力の文言
+
+### 自分で判断した部分
+
+- **アーキテクチャの分割**（`ai` / `bot` / `bridge` / `storage` / `scheduler` の境界と依存方向）
+- **マルチLLM抽象化を入れる判断** — 単一ベンダー前提のほうが実装は速いが、乗り換え可能性を優先した
+- **同期ブリッジの安全設計** — 全文置換ではなくマーカー区間のみ置換する方式。手書きの記録を壊さないことを最優先の制約に置いた
+- **機微情報の境界線** — 何をgit管理下に置き、何を置かないか。記録の「形式」と「中身」を分離する方針
+- **安全機能の要件** — 危機検知を会話より優先させる設計と、その文面
+- **テストを書く範囲と、AI生成コードを通す基準**
+- **AIエージェント自体の運用設計** — [`AGENTS.md`](./AGENTS.md)をSSOT（Single Source of Truth）とし、[`CLAUDE.md`](./CLAUDE.md)・[`.github/copilot-instructions.md`](./.github/copilot-instructions.md)を薄い入口として派生させる構成。同じ指示を複数ファイルに複製せず、エージェントを問わず同じ設計で動かすための仕組み
+
+### MCP（Model Context Protocol）連携
+
+Claude Desktopのライブアーティファクト「Health Sheet」から、Desktop Commander MCP経由でログファイルのマーカー区間だけを直接書き換えます。MCP未接続時はクリップボードへのコピーにフォールバックします。**AIから外部ツール・ローカルファイルを安全に操作させる**実装例です。
 
 ## 関連リンク
 

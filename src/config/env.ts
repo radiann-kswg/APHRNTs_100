@@ -27,6 +27,10 @@ const envSchema = z.object({
   DB_PATH: z.string().default(".cache/session.db"),
   HEARTBEAT_PATH: z.string().default(".cache/heartbeat.json"),
   HEARTBEAT_INTERVAL_MS: z.coerce.number().int().positive().default(30000),
+  // 復帰報告: 起動時に前回heartbeatとの間隔がこの値（ミリ秒）以上ならオーナーへ
+  // 「復帰したぞ」とチャットで一言報告する（VMごと再起動などwatchdog通知が飛ばないケース向け）。
+  // 0で無効。既定10分（レイヤー2のwatchdog再起動＝数十秒程度では発火しない値にすること）。
+  RECOVERY_NOTICE_THRESHOLD_MS: z.coerce.number().int().nonnegative().default(600000),
 
   NODE_ENV: z.enum(["development", "production"]).default("development"),
   LOG_LEVEL: z.enum(["error", "warn", "info", "debug"]).default("info"),
@@ -37,6 +41,12 @@ const envSchema = z.object({
   WEEKLY_SUMMARY_DAY_OF_WEEK: z.coerce.number().int().min(0).max(6).default(0),
   WEEKLY_SUMMARY_HOUR: z.coerce.number().int().min(0).max(23).default(20),
   DAILY_REFLECTION_HOUR: z.coerce.number().int().min(0).max(23).default(20),
+  // 朝の記録リマインドをMisskeyへ送る時刻（0〜23時）。夜の振り返り（DAILY_REFLECTION_HOUR）とは
+  // 別枠で1日1回発火し、文面も朝向けのものを使う。空文字を指定すると朝のリマインドを無効にできる。
+  DAILY_MORNING_REMINDER_HOUR: z
+    .union([z.literal(""), z.coerce.number().int().min(0).max(23)])
+    .default(8)
+    .transform((value) => (value === "" ? null : value)),
   // 傾向検知（気分低下＋服薬ギャップ）による優しい声かけを1日1回チェックする時刻
   TREND_NUDGE_HOUR: z.coerce.number().int().min(0).max(23).default(21),
   // 夜の服薬リマインドを送る時刻（その日の夜🌙が服用済みならスキップ）

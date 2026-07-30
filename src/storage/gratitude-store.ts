@@ -44,4 +44,12 @@ export class GratitudeStore {
       .prepare("SELECT * FROM gratitude_logs WHERE user_id = ? AND date >= ? ORDER BY date ASC")
       .all(userId, sinceDate) as GratitudeRow[];
   }
+
+  /** 指定日の記録が1件でもあるか（連携ブリッジの重複取り込み防止に使う） */
+  hasAnyOnDate(userId: string, date: string): boolean {
+    const row = this.db
+      .prepare("SELECT 1 FROM gratitude_logs WHERE user_id = ? AND date = ? LIMIT 1")
+      .get(userId, date);
+    return row !== undefined;
+  }
 }

@@ -124,8 +124,10 @@ function main(): void {
       const result = runImport(deps);
       const medicationNote = result.medicationMerged > 0 ? `・服薬の逆マージ ${result.medicationMerged}日分` : "";
       const checkinNote = result.checkinMerged > 0 ? `・チェックイン補完 ${result.checkinMerged}日分` : "";
+      const cbtNote = result.cbtMerged > 0 ? `・CBT記録の逆マージ ${result.cbtMerged}日分` : "";
+      const creativeNote = result.creativeMerged > 0 ? `・創作進捗の取り込み ${result.creativeMerged}日分` : "";
       console.log(
-        `[sync] Claude→Bot: ${deps.logsDir}/ から ${result.imported}件のセッション記録を取り込んだ（スキップ ${result.skipped}件${medicationNote}${checkinNote}）。`,
+        `[sync] Claude→Bot: ${deps.logsDir}/ から ${result.imported}件のセッション記録を取り込んだ（スキップ ${result.skipped}件${medicationNote}${checkinNote}${cbtNote}${creativeNote}）。`,
       );
     }
     if (mode === "export" || mode === "sync") {

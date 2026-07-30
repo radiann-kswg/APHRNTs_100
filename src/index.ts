@@ -9,7 +9,11 @@ import { createBridgeRuntime } from "./bridge/runtime.js";
 import { RateLimiter } from "./bot/ratelimit/index.js";
 import { loadEnv } from "./config/env.js";
 import { MisskeyClient } from "./misskey/client.js";
-import { createDailyReflectionTask, createWeeklySummaryTask } from "./scheduler/index.js";
+import {
+  createDailyMorningReminderTask,
+  createDailyReflectionTask,
+  createWeeklySummaryTask,
+} from "./scheduler/index.js";
 import { createMedicationReminderTask } from "./scheduler/med-reminder-task.js";
 import { TaskScheduler } from "./scheduler/task-scheduler.js";
 import { createTrendNudgeTask } from "./scheduler/trend-nudge-task.js";
@@ -26,11 +30,14 @@ import { SessionStore } from "./storage/session-store.js";
 import { ThoughtRecordStore } from "./storage/thought-record-store.js";
 import { createHeartbeatWriter } from "./utils/heartbeat.js";
 import { createLogger } from "./utils/logger.js";
+import { notifyRecoveryIfLongDowntime, readPreviousHeartbeatTs } from "./utils/recovery-notice.js";
 
 async function main(): Promise<void> {
   const env = loadEnv();
   const logger = createLogger(env.LOG_LEVEL);
   const startedAt = new Date().toISOString();
+  // 復帰報告用: heartbeat writer が上書きする前に、前回プロセスの最終heartbeat時刻を控えておく
+  const previousHeartbeatTs = readPreviousHeartbeatTs(env.HEARTBEAT_PATH);
   const db = openDatabase(env.DB_PATH);
 
   const sessionStore = new SessionStore(db);
@@ -82,6 +89,7 @@ async function main(): Promise<void> {
     safetyIncidentStore,
     toolHandlerDeps: { checkinStore, thoughtRecordStore, gratitudeStore, activationStore, medicationStore, moodEventStore },
     now: () => new Date(),
+    logger,
   });
   if (bridge) {
     handleMessage = bridge.wrapHandler(handleMessage, (error) => {
@@ -155,20 +163,31 @@ async function main(): Promise<void> {
 
   misskeyClient.connect(
     (note) => {
+      // 処理の開始時点で「処理中」の印を付ける。付けられなければreplay側で処理中・処理済み
+      // （または二重配信）なのでスキップし、同じメンションへの二重応答を防ぐ
+      if (!replay.beginMention(note.id)) {
+        return;
+      }
       onMention(note)
         .then(() => {
           replay.markMentionProcessed(note.id);
         })
         .catch((error: unknown) => {
+          // 失敗時は印を外し、次回のreplayで再試行できるようにする
+          replay.abortMention(note.id);
           logger.error("mention処理でエラーが発生した", error);
         });
     },
     (message) => {
+      if (!replay.beginChat(message.id)) {
+        return;
+      }
       onChatMessage(message)
         .then(() => {
           replay.markChatProcessed(message.id);
         })
         .catch((error: unknown) => {
+          replay.abortChat(message.id);
           logger.error("一対一チャット処理でエラーが発生した", error);
         });
     },
@@ -188,6 +207,16 @@ async function main(): Promise<void> {
     },
   );
   logger.info("Misskeyへの接続を開始した。");
+
+  // 復帰報告: 長時間ダウン（VM停止・フリーズ等でwatchdog通知が飛ばないケース）からの復帰を
+  // オーナーへ一言報告する。REST API経由なのでWS接続の確立は待たない。失敗しても起動は継続する。
+  void notifyRecoveryIfLongDowntime({
+    previousTs: previousHeartbeatTs,
+    thresholdMs: env.RECOVERY_NOTICE_THRESHOLD_MS,
+    ownerUserId: env.BOT_OWNER_USER_ID,
+    sendChatMessage: (toUserId, text) => misskeyClient.sendChatMessage(toUserId, text),
+    logger,
+  });
 
   const heartbeat = createHeartbeatWriter(env.HEARTBEAT_PATH, env.HEARTBEAT_INTERVAL_MS, () => ({
     wsConnected,
@@ -222,6 +251,17 @@ async function main(): Promise<void> {
       misskeyClient,
       hour: env.DAILY_REFLECTION_HOUR,
     }),
+    // 朝の記録リマインド。DAILY_MORNING_REMINDER_HOUR が空（null）なら登録しない。
+    ...(env.DAILY_MORNING_REMINDER_HOUR === null
+      ? []
+      : [
+          createDailyMorningReminderTask({
+            botStateStore,
+            sessionStore,
+            misskeyClient,
+            hour: env.DAILY_MORNING_REMINDER_HOUR,
+          }),
+        ]),
     createTrendNudgeTask({
       botStateStore,
       sessionStore,

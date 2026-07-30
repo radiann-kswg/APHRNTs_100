@@ -114,3 +114,5 @@ Claude Desktopのライブアーティファクト「Health Sheet」は、「log
 ## 記録のPDF出力
 
 `logs/` の記録は `npm run export:pdf -- --from YYYY-MM-DD --to YYYY-MM-DD` で、期間指定のひとつのPDF（既定の出力先: `.cache/exports/`・git管理外）にまとめて出力できる。通院時に経過を見せる・振り返りを紙で読み返す等の用途を想定。Claude Desktop導入環境ではチャットで「100(モモ)」に頼むだけで生成できる。詳細は [../docs/logs-pdf-export.md](../docs/logs-pdf-export.md) を参照。
+
+また、`npm run export:weekly-pdf -- --week YYYY-MM-DD` で、その日を含む**日曜〜土曜の週間レポートPDF**（気分・服薬達成率・睡眠などの傾向集計＋任意で100(モモ)の所見文＋各日の記録）も出力できる（同ドキュメント参照）。
