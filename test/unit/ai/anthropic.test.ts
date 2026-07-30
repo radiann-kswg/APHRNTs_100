@@ -2,6 +2,20 @@ import { describe, expect, it } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import { createAnthropicProvider } from "../../../src/ai/anthropic.js";
 import type { ToolDefinition } from "../../../src/ai/provider.js";
+import { ANTHROPIC_MAX_TOKENS } from "../../../src/config/constants.js";
+import type { Logger } from "../../../src/utils/logger.js";
+
+/** warnに出た文言だけを集めるロガー（診断ログの内容を検証するため） */
+function createRecordingLogger(warnings: string[]): Logger {
+  return {
+    error: () => {},
+    warn: (message: string, ...args: unknown[]) => {
+      warnings.push([message, ...args.map(String)].join(" "));
+    },
+    info: () => {},
+    debug: () => {},
+  };
+}
 
 const TOOLS: ToolDefinition[] = [
   {
@@ -113,8 +127,11 @@ describe("createAnthropicProvider", () => {
     expect(calls).toHaveLength(1);
   });
 
-  it("ツール未実行で空応答の場合は追加リクエストせず空のまま返す（pipeline側のフォールバックに委ねる）", async () => {
-    const { client, calls } = fakeAnthropicClient([{ content: [], stop_reason: "end_turn" }]);
+  it("ツール未実行で空応答の場合もツール無効で再生成する", async () => {
+    const { client, calls } = fakeAnthropicClient([
+      { content: [], stop_reason: "end_turn" },
+      { content: [{ type: "text", text: "おう、聞いてるぞ。" }], stop_reason: "end_turn" },
+    ]);
     const provider = createAnthropicProvider("test-key", undefined, client);
 
     const result = await provider.generateReply({
@@ -124,7 +141,70 @@ describe("createAnthropicProvider", () => {
       executeTool: async () => "unused",
     });
 
+    expect(result.text).toBe("おう、聞いてるぞ。");
+    expect(result.toolInvocations).toHaveLength(0);
+    expect(calls).toHaveLength(2);
+    expect(calls[1]?.params["tool_choice"]).toEqual({ type: "none" });
+  });
+
+  it("出力トークン上限でtool_useが切れた場合、再生成して本文を返しつつ警告を残す", async () => {
+    const { client, calls } = fakeAnthropicClient([
+      // 1回目: tool_useの入力生成中に上限へ達し、本文もツール実行結果も無い（本番で観測した形）
+      { content: [{ type: "tool_use", id: "tu_1", name: "save_checkin", input: {} }], stop_reason: "max_tokens" },
+      // 2回目: ツール無効の再生成
+      { content: [{ type: "text", text: "すまん、続きを話すぞ。" }], stop_reason: "end_turn" },
+    ]);
+    const warnings: string[] = [];
+    const logger = createRecordingLogger(warnings);
+    const provider = createAnthropicProvider("test-key", undefined, client, logger);
+
+    const result = await provider.generateReply({
+      systemPrompt: "test",
+      messages: [{ role: "user", content: "今日の記録を頼む（長文）" }],
+      tools: TOOLS,
+      executeTool: async () => "unused",
+    });
+
+    expect(result.text).toBe("すまん、続きを話すぞ。");
+    expect(result.toolInvocations).toHaveLength(0);
+    expect(calls).toHaveLength(2);
+    expect(warnings.some((line) => line.includes("出力トークン上限"))).toBe(true);
+    expect(warnings.some((line) => line.includes("stop_reason=max_tokens"))).toBe(true);
+  });
+
+  it("再生成でも本文が空なら、原因が分かる診断ログを残して空のまま返す", async () => {
+    const { client } = fakeAnthropicClient([
+      { content: [], stop_reason: "end_turn" },
+      { content: [], stop_reason: "end_turn" },
+    ]);
+    const warnings: string[] = [];
+    const logger = createRecordingLogger(warnings);
+    const provider = createAnthropicProvider("test-key", undefined, client, logger);
+
+    const result = await provider.generateReply({
+      systemPrompt: "test",
+      messages: [{ role: "user", content: "やあ" }],
+      tools: TOOLS,
+      executeTool: async () => "unused",
+    });
+
     expect(result.text).toBe("");
-    expect(calls).toHaveLength(1);
+    expect(warnings.some((line) => line.includes("再生成でも本文が得られなかった"))).toBe(true);
+  });
+
+  it("max_tokensには定数ANTHROPIC_MAX_TOKENSを使う", async () => {
+    const { client, calls } = fakeAnthropicClient([
+      { content: [{ type: "text", text: "おう。" }], stop_reason: "end_turn" },
+    ]);
+    const provider = createAnthropicProvider("test-key", undefined, client);
+
+    await provider.generateReply({
+      systemPrompt: "test",
+      messages: [{ role: "user", content: "やあ" }],
+      tools: TOOLS,
+      executeTool: async () => "unused",
+    });
+
+    expect(calls[0]?.params["max_tokens"]).toBe(ANTHROPIC_MAX_TOKENS);
   });
 });
