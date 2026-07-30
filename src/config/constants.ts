@@ -6,6 +6,13 @@ export const DEFAULT_GEMINI_MODEL = "gemini-1.5-flash";
 // プロセスは生きたまま無応答になり続けるのを防ぐため、有限時間で失敗させる。
 export const AI_REQUEST_TIMEOUT_MS = 30_000;
 
+// Anthropic APIへの1リクエストあたりの最大出力トークン数。
+// 症状: 1024では、長文のチェックイン記録などでtool_useの入力生成中に上限へ達し、
+// stop_reasonが "max_tokens" のまま本文もツール実行結果も無い応答になる（＝空応答）。
+// 対策: 日本語の返答＋ツール入力が収まる余裕を持たせる。値を変える際は、
+// 上のAI_REQUEST_TIMEOUT_MS（30秒）以内に生成が終わる範囲に留めること。
+export const ANTHROPIC_MAX_TOKENS = 4096;
+
 // セッション（会話履歴）の保持ポリシー。参考repoのSessionStore（30分TTL）を踏襲。
 export const SESSION_TTL_MS = 30 * 60 * 1000;
 export const SESSION_MAX_MESSAGES = 24;
