@@ -79,7 +79,7 @@ async function main(): Promise<void> {
     ? (userId: string, channel: Channel, now: Date) =>
         buildSystemPrompt(persona, { claudeNotesSection: bridge.notesSectionFor(userId), channel, now })
     : (_userId: string, channel: Channel, now: Date) => buildSystemPrompt(persona, { channel, now });
-  const aiProvider = createAIProvider(env);
+  const aiProvider = createAIProvider(env, logger);
 
   let handleMessage = createMessagePipeline({
     aiProvider,
