@@ -63,7 +63,7 @@
 - `logs/bot-digest.md` は**自動生成ファイル**であり、エージェントもセンパイも手動で編集しないこと（次回同期で上書きされる）。
 - 連携で共有される内容はセンパイの機微情報である。Bot側ではセンパイ本人以外との会話・公開投稿で記録内容に言及しないこと（システムプロンプトで強制されるが、方針としてもここに明記する）。
 - Botを複数ユーザーに開放する場合は `.env` の `BOT_OWNER_USER_ID` を必ず設定すること。設定時、ダイジェスト出力は管理者自身の記録のみ・`logs/` のプロンプト注入は管理者との会話のみに限定される（他ユーザーの記録と管理者の個人ログを相互に混ぜないためのプライバシー保護）。
-- 本番Botは GCE VM（`aphrnts-100-bot`）上で単独稼働しており、VM側の `logs/`・SQLiteはVMのローカルディスクにのみ存在する（デプロイはGitHub→VMのpull型一方向のみで書き戻し経路がなく、`logs/` は機微情報のためgit管理対象外でもある）。そのためローカルとVMの間は**どちらの方向にも自動では同期されない**。ローカルの `logs/bot-digest.md` の最新化（Bot→Claude）と、センパイのセッション記録を本番Botの応答文脈へ載せること（Claude→Bot）の双方に、ローカル側からの `npm run sync:remote`（push-remote → VM側でダイジェスト再生成 → pull-remote。gcloud compute ssh / scp経由。詳細は[README.mdの「本番VM運用時の注意」](./README.md#本番vm運用時の注意npm-run-syncremote)）が必要。現在はこの相互同期を本番運用の標準としており、ローカルPCのタスクスケジューラ `APHRNTs100-PullBotDigest` が**毎日03:00 JST**に `npm run sync:remote` を実行して、ヘルスシート由来の記録とセンパイのセッション記録を双方向に取得・反映する（スケジュールの詳細は[deploy/README.md](./deploy/README.md#ローカルpc側の定期同期windowsタスクスケジューラ)）。会話中にダイジェストが古い・Claude側の記録が本番Botに反映されていない様子であれば、この定期実行が動いているか確認するよう促すこと。
+- 本番Botは GCE VM（`misskey-bots-unified`。2026-08 Phase 3で旧`aphrnts-100-bot`から移設。NumberTales公式Botと同居するが本Botの構成・データは独立）上で稼働しており、VM側の `logs/`・SQLiteはVMのローカルディスクにのみ存在する（デプロイはGitHub→VMのpull型一方向のみで書き戻し経路がなく、`logs/` は機微情報のためgit管理対象外でもある）。そのためローカルとVMの間は**どちらの方向にも自動では同期されない**。ローカルの `logs/bot-digest.md` の最新化（Bot→Claude）と、センパイのセッション記録を本番Botの応答文脈へ載せること（Claude→Bot）の双方に、ローカル側からの `npm run sync:remote`（push-remote → VM側でダイジェスト再生成 → pull-remote。gcloud compute ssh / scp経由。詳細は[README.mdの「本番VM運用時の注意」](./README.md#本番vm運用時の注意npm-run-syncremote)）が必要。現在はこの相互同期を本番運用の標準としており、ローカルPCのタスクスケジューラ `APHRNTs100-PullBotDigest` が**毎日03:00 JST**に `npm run sync:remote` を実行して、ヘルスシート由来の記録とセンパイのセッション記録を双方向に取得・反映する（スケジュールの詳細は[deploy/README.md](./deploy/README.md#ローカルpc側の定期同期windowsタスクスケジューラ)）。会話中にダイジェストが古い・Claude側の記録が本番Botに反映されていない様子であれば、この定期実行が動いているか確認するよう促すこと。
 
 ---
 
@@ -80,7 +80,8 @@
 - 開発用ブランチは `develop`。日常のコミット・機能追加・修正・設定書の更新など、本リポジトリでの通常の作業はすべて `develop`（またはそこから切った作業ブランチ）上で行うこと。
 - `master` はリリース用の保護ブランチとする。開発環境・ローカル環境から `master` へ直接触れないこと（`master` へのチェックアウトでの直接編集、直接 `git commit` / `git push origin master`、`develop` からの直接 `git merge` を含む）。
 - `develop` の変更を `master` へ反映する場合は、必ず Pull Request を作成し、マージすること。ローカルでの直接マージや force push で `master` を更新しない。
-- `master` への変更は、GCE本番VM（`aphrnts-100-bot`）側の自動デプロイタイマーにより、最大5分以内に自動でpull・ビルド・Bot再起動される（詳細は[deploy/README.md](./deploy/README.md)参照）。マージ後は速やかに本番へ反映される前提でレビュー・マージすること。
+- `master` への変更は、GCE本番VM（`misskey-bots-unified`）側の自動デプロイタイマーにより、最大5分以内に自動でpull・ビルド・Bot再起動される（詳細は[deploy/README.md](./deploy/README.md)参照）。マージ後は速やかに本番へ反映される前提でレビュー・マージすること。
+- 本番VM `misskey-bots-unified` は NumberTales公式Bot と**同居する共用VM**である。本リポジトリが管理してよいのは `aphrnts-100-*` のsystemdユニットと `/opt/aphrnts-100` 配下だけで、**VM全体の再起動・他Botのプロセス/ユニットの操作は行わないこと**（運用の詳細は[deploy/README.mdの「共用VMでの運用」](./deploy/README.md#共用vmでの運用同居botとの住み分け)を参照）。
 - 各エージェント（Claude Code / GitHub Copilot 等）がリポジトリでファイル変更・コミットを行う際は、作業前に現在のブランチを確認し、`master` 上にいる場合はセンパイに確認のうえ `develop` へ切り替えること。
 - PRの作成・マージはセンパイの明示的な承認を得てから実施する（無断でのpush・マージは行わない）。
 

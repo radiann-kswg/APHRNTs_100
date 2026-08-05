@@ -71,8 +71,8 @@ const envSchema = z.object({
   // 本番Bot（GCE VM）との相互同期（npm run sync:pull-remote / sync:push-remote / sync:remote）のための設定。
   // 既定値は deploy/README.md に記載の本番VM構成に合わせてある。VMを再構築した場合のみ変更すること。
   GCE_PROJECT: z.string().default("numbertales-misskey-surver"),
-  GCE_ZONE: z.string().default("asia-northeast1-a"),
-  GCE_INSTANCE: z.string().default("aphrnts-100-bot"),
+  GCE_ZONE: z.string().default("us-central1-a"),
+  GCE_INSTANCE: z.string().default("misskey-bots-unified"),
   // VM上のbot-digest.mdの絶対パス。push側はここからVMのlogsディレクトリ（/opt/aphrnts-100/logs）と
   // リポジトリルート（/opt/aphrnts-100）を導出するため、設定はこの1項目に集約している。
   REMOTE_BOT_DIGEST_PATH: z.string().default("/opt/aphrnts-100/logs/bot-digest.md"),

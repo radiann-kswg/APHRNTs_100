@@ -11,9 +11,21 @@ User=aphrnts-bot
 Group=aphrnts-bot
 WorkingDirectory=/opt/aphrnts-100
 EnvironmentFile=/opt/aphrnts-100/.env
+# Node.jsのJSヒープ上限。下のMemoryMaxより低く置き、cgroupのOOM killより先に
+# GC・JSの例外として現れるようにする（EnvironmentFileより後に書いて優先させる）。
+Environment=NODE_OPTIONS=--max-old-space-size=512
 ExecStart=/usr/bin/node dist/index.js
 Restart=on-failure
 RestartSec=10
+# 共用VM（misskey-bots-unified / e2-medium・4GB）では公式Bot（PM2常駐）と同居するため、
+# 想定外のメモリ肥大で同居プロセスを巻き込まないよう上限を設ける。
+# MemoryHigh=ソフト上限（超えると回収圧がかかるが殺されない） / MemoryMax=ハード上限（OOM kill）。
+# 通常時のRSSは数百MB程度で、MemoryMaxに達するのは異常時のみ。殺されてもRestart=on-failureで復帰する。
+MemoryHigh=768M
+MemoryMax=1G
+# SpotのプリエンプトはACPIシャットダウン通知から約30秒で強制停止されるため、
+# 停止処理はそれより短く切り上げる（shutdown()はDBクローズ等のみで即完了する）。
+TimeoutStopSec=20
 NoNewPrivileges=true
 ProtectSystem=strict
 ReadWritePaths=/opt/aphrnts-100

@@ -1,6 +1,6 @@
 # deploy/ — GCE VM上の本番運用設定
 
-本リポジトリのMisskey Bot（`src/`）を、Google Compute Engineの本番VM（`aphrnts-100-bot` / プロジェクト`numbertales-misskey-surver` / `asia-northeast1-a`）上で常駐運用するための設定一式です。VMを再構築する場合や、設定内容を確認したい場合の正典として、実際にVMへ配置している内容をここに記録しています。
+本リポジトリのMisskey Bot（`src/`）を、Google Compute Engineの本番VM（**`misskey-bots-unified`** / プロジェクト`numbertales-misskey-surver` / `us-central1-a` / **Spot** e2-medium）上で常駐運用するための設定一式です。2026-08のコスト削減リファクタリング（Phase 3）で旧VM `aphrnts-100-bot`（asia-northeast1-a）から移設され、NumberTales公式Bot（PM2常駐）と同居しています。本Botのユニット構成・配置先（`/opt/aphrnts-100`）・実行ユーザー（`aphrnts-bot`）は移設前と同一です。VMを再構築する場合や、設定内容を確認したい場合の正典として、実際にVMへ配置している内容をここに記録しています。
 
 VM自体は `/opt/aphrnts-100` に本リポジトリ（`master`ブランチ）をクローンし、専用の非rootユーザー`aphrnts-bot`で稼働しています。`.env`は`.gitignore`対象のため、VM側で別途配置してください。
 
@@ -16,6 +16,36 @@ VM自体は `/opt/aphrnts-100` に本リポジトリ（`master`ブランチ）�
 | `aphrnts-100-watchdog.service` | `/etc/systemd/system/aphrnts-100-watchdog.service` | 上記スクリプトを1回実行するsystemdサービス（oneshot） |
 | `aphrnts-100-watchdog.timer` | `/etc/systemd/system/aphrnts-100-watchdog.timer` | `aphrnts-100-watchdog.service`を3分おきに起動するタイマー |
 
+## 共用VMでの運用（同居Botとの住み分け）
+
+統合VM `misskey-bots-unified`（e2-medium・2vCPU / 4GB・**Spot**）は、NumberTales公式Bot（PM2常駐）と本Botが同居しています。**同じマシンのCPU・メモリ・ディスク・journaldを分け合う**前提で運用してください。
+
+### 運用の原則
+
+- **他Botのプロセス・ユニット・ファイルには触れない。** 本リポジトリが管理するのは`aphrnts-100-*`のユニットと`/opt/aphrnts-100`配下だけです。ウォッチドッグも`systemctl restart aphrnts-100-bot`しか行いません（VMの再起動・他ユニットの操作は一切しない）。
+- **VM全体の再起動が要る作業は、公式Bot側の停止も伴う。** 本Botの都合だけで`reboot`しないこと。VMごとの復旧は公式Botの外部ウォッチドッグ（`numbertales-gce-watchdog`）の担当です。
+- **ユニット名・ユーザー名・配置先は名前空間で衝突を避ける。** ユニットは`aphrnts-100-`接頭辞、実行ユーザーは`aphrnts-bot`、配置先は`/opt/aphrnts-100`で統一しています（移設前と同一）。新しいユニットを足す場合も同じ接頭辞に揃えること。
+- **本Botはポートを一切listenしない**（MisskeyへのWebSocket/RESTは発信のみ）ため、公式Botとのポート競合は起きません。この性質を壊す変更（ヘルスチェック用HTTPサーバの追加など）を入れる場合は、事前にポートの空きを確認すること。
+
+### 同居Botを巻き込まないためのリソース設定
+
+| ユニット | 設定 | 意図 |
+| --- | --- | --- |
+| `aphrnts-100-bot.service` | `MemoryHigh=768M` / `MemoryMax=1G` | 想定外のメモリ肥大で同居Botを巻き添えにしない。通常時のRSSは数百MB程度で、ハード上限に達するのは異常時のみ（OOM killされても`Restart=on-failure`で復帰する） |
+| 〃 | `NODE_OPTIONS=--max-old-space-size=512` | JSヒープの上限を`MemoryMax`より低く置き、cgroupのOOM killより先にGC・JS例外として現れるようにする |
+| 〃 | `TimeoutStopSec=20` | Spotのプリエンプトは通知から約30秒で強制停止されるため、停止処理をその内側に収める |
+| `aphrnts-100-deploy.service` | `Nice=10` / `CPUWeight=20` / `IOWeight=20` | `npm ci`・`tsc`が公式Botの応答を巻き添えにしないよう、優先度を下げて「空いているときに進む」ようにする（デプロイは数分遅れても支障がない） |
+| 〃 | `MemoryHigh=1G` | ビルドのメモリ使用を穏やかに抑える。ハード上限にすると`npm ci`自体が落ちてデプロイが進まなくなるため、ソフト上限のみ |
+| 〃 | `TimeoutStartSec=15min` | `Type=oneshot`は既定でタイムアウト無し。ハングした`npm`がユニットを`activating`のまま居座らせるとデプロイが止まり続ける（ウォッチドッグのスキップ条件にも居座る）ため上限を設ける |
+| `*.timer` | `RandomizedDelaySec`（deploy 60秒 / watchdog 20秒） | 同居Botのジョブ・OSの定期処理と発火が毎回きっかり重なるのを避ける |
+
+### Spot VMであることの影響
+
+- **プリエンプトされるとVMごと停止する。** 復帰は公式Botの外部ウォッチドッグが担当し、Bot本体は`systemctl enable`済みなのでVM起動時に自動で立ち上がります。
+- 停止中に届いたメンション・一対一チャットは、起動後の**取りこぼし回収（replay）**が遡って処理します（後述）。
+- ダウン時間が`RECOVERY_NOTICE_THRESHOLD_MS`（既定10分）を超えると、起動時にオーナーへ復帰報告のチャットが飛びます。**プリエンプトのたびにこの通知が届く**ので、頻度が気になる場合は`.env`で閾値を上げるか、`0`で無効化してください。
+- ビルドやDB書き込みの途中で停止しうる前提で、自動デプロイは[中断されたデプロイの再開](#中断されたデプロイの再開cachedeployed-rev)に対応させてあります。
+
 ## 自動デプロイの仕組み
 
 `master`へのマージ後、最大5分以内にVM側のタイマーが検知し、自動でpull・ビルド・Bot再起動まで行います（VM側からGitHubへ定期的に取りに行く「pull型」。GitHub Actions等の外部からVMへの新しい受信経路・SSH秘密鍵の保存は不要です）。
@@ -24,11 +54,20 @@ VM自体は `/opt/aphrnts-100` に本リポジトリ（`master`ブランチ）�
 - 差分がない場合は何もせず終了します（毎回ビルドし直すことはありません）。
 - 動作確認: `sudo journalctl -u aphrnts-100-deploy --no-pager -n 20`
 
+### 中断されたデプロイの再開（`.cache/deployed-rev`）
+
+判定に使うのは「HEADと`origin/master`の一致」だけではなく、**ビルドと再起動まで完了したSHA**を記録した`/opt/aphrnts-100/.cache/deployed-rev`です。
+
+- Spot VMのプリエンプトや`TimeoutStartSec`により、`git reset --hard`のあと・`npm run build`の前で中断されると、作業ツリーだけが最新になった状態が残ります。HEADの一致だけで判定していると、以降ずっと「差分なし」で終了し、**古い（または壊れた）`dist/`のまま復帰し続ける**ことになります。
+- そのため、作業を始める前に完了記録を削除し、再起動まで通ったところで`origin/master`のSHAを書き込みます。中断された場合は次回の実行で`resuming interrupted deploy at <sha>`とログに出て、ビルドからやり直します。
+- `.cache/`はgit管理外なので`git reset --hard`では消えません。手動で強制的に再ビルドさせたい場合は`sudo rm -f /opt/aphrnts-100/.cache/deployed-rev`とすれば、次のタイマー発火で作り直されます。
+
 ## 応答停止時の自動復帰（ウォッチドッグ）
 
 `Restart=on-failure`はプロセスがクラッシュ（異常終了）した場合にしか働かない。プロセス自体は生きているのに、WebSocket接続が切れたまま戻らない・イベントループがハングして無応答になる、といった「クラッシュを伴わない障害」には対応できない。これを補うのが`aphrnts-100-watchdog.sh`。
 
 - Bot本体（`src/index.ts`）が30秒おきに書き出す`/opt/aphrnts-100/.cache/heartbeat.json`（`wsConnected` / `lastConnectedAt` / `lastDisconnectedAt` / `reconnectCount` / `disconnectsLastHour`）を3分おきに確認する。
+- **自動デプロイの実行中（`aphrnts-100-deploy.service`が`active` / `activating`）は、判定自体を見送る**。デプロイ中はBotが停止したままheartbeatが更新されず、共用VMではCPUを同居Botと分け合うぶん`npm ci`→`tsc`が3分（下記のstale判定）を超えることがある。そこへウォッチドッグの再起動が挟まるとビルドと競合するため、デプロイ側が最後に行う再起動に任せる（`Type=oneshot`のユニットは実行中の状態が`active`ではなく`activating`になる点に注意）。
 - 次のいずれかに該当すれば`systemctl restart aphrnts-100-bot`で自動復帰させる。
   - heartbeat.jsonの更新が3分以上止まっている（プロセスが完全にハングしている可能性）
   - WS切断状態（`wsConnected: false`）が5分以上続いている（後述のアプリ側keepalive・自動再接続でも復帰できていない可能性）
@@ -42,7 +81,7 @@ VM自体は `/opt/aphrnts-100` に本リポジトリ（`master`ブランチ）�
 
 ### VM自体の停止・フリーズへの備え（レイヤー3）と復帰報告
 
-上記ウォッチドッグはVM内で動くため、**VM自体**が停止・フリーズした場合は救えない。この層（GCE外部ウォッチドッグ）の導入計画・手順は [docs/gce-watchdog-layer3.md](../docs/gce-watchdog-layer3.md) を参照。また、VMごと復旧した場合はウォッチドッグの再起動通知が飛ばないため、Bot本体が起動時に長時間ダウン（`RECOVERY_NOTICE_THRESHOLD_MS`・既定10分以上）を検知するとオーナーへ復帰報告のチャットを送る（`src/utils/recovery-notice.ts`）。
+上記ウォッチドッグはVM内で動くため、**VM自体**が停止・フリーズした場合は救えない。この層は、統合VM `misskey-bots-unified` では公式Botの GCE外部ウォッチドッグ（`numbertales-gce-watchdog` / us-central1。**Spotプリエンプト後の自動再起動も担当**）に一本化されているため、本リポジトリ個別での導入は不要（経緯・旧計画は [docs/gce-watchdog-layer3.md](../docs/gce-watchdog-layer3.md) を参照）。また、VMごと復旧した場合はウォッチドッグの再起動通知が飛ばないため、Bot本体が起動時に長時間ダウン（`RECOVERY_NOTICE_THRESHOLD_MS`・既定10分以上）を検知するとオーナーへ復帰報告のチャットを送る（`src/utils/recovery-notice.ts`）。
 
 ## Misskeyストリームの接続維持（keepalive・自動再接続）
 
@@ -63,9 +102,64 @@ Bot本体（[`src/misskey/client.ts`](../src/misskey/client.ts)）は、Misskey�
 3. `aphrnts-100-watchdog.service` / `aphrnts-100-watchdog.timer` を `/etc/systemd/system/` へ配置し、`systemctl daemon-reload && systemctl enable --now aphrnts-100-watchdog.timer`
 4. `aphrnts-bot`ユーザーが`systemctl restart aphrnts-100-bot`を実行できるよう、これらのタイマー・サービスは**root権限**で実行されるように構成すること（`User=`を指定しない＝root実行。`aphrnts-100-deploy.sh`内で`sudo -u aphrnts-bot`によりgit/npm操作のみ非root権限に降格する）。
 
-以降、`aphrnts-100-deploy.sh` / `aphrnts-100-watchdog.sh`自体は`/opt/aphrnts-100`配下（gitで管理される側）に置かれているため、これらのスクリプトの中身を更新した場合も次回のpullで自動的に反映されます。ただし`*.service` / `*.timer`ユニットファイルの変更は`/etc/systemd/system/`への再配置と`systemctl daemon-reload`が別途必要です（自動化の対象外）。
+以降、`aphrnts-100-deploy.sh` / `aphrnts-100-watchdog.sh`自体は`/opt/aphrnts-100`配下（gitで管理される側）に置かれているため、これらのスクリプトの中身を更新した場合も次回のpullで自動的に反映されます。ただし`*.service` / `*.timer`ユニットファイルの変更は`/etc/systemd/system/`への再配置と`systemctl daemon-reload`が別途必要です（自動化の対象外。手順は[次節のランブック](#共用vm対応のユニット変更を適用するランブック2026-08--phase-3)を参照）。
 
 - 動作確認: `sudo journalctl -u aphrnts-100-watchdog --no-pager -n 20`
+
+## 共用VM対応のユニット変更を適用するランブック（2026-08 / Phase 3）
+
+[共用VMでの運用](#共用vmでの運用同居botとの住み分け)のリソース設定・タイムアウトは`*.service` / `*.timer`の変更なので、**`master`へマージするだけでは本番に反映されません**（スクリプト2本はpullで自動反映される）。以下はセンパイがローカルのgcloud CLIから実行する手順です。所要時間は5分程度、公式Bot（PM2常駐）には影響しません。
+
+### 0. 前提
+
+- `master`へのマージが済み、自動デプロイで`/opt/aphrnts-100`が最新になっていること（`deploy/*.sh`の新しい内容がVM上にある状態）。
+- VM上でsudo権限を持つユーザーとしてSSHできること（`npm run sync:remote`が通っているなら条件を満たしている）。
+
+```bash
+# 変更後のスクリプトがVMに届いているかを先に確認する
+gcloud compute ssh misskey-bots-unified --zone=us-central1-a --project=numbertales-misskey-surver \
+  --tunnel-through-iap --command="cd /opt/aphrnts-100 && git log --oneline -1 && grep -c DEPLOYED_REV_PATH deploy/aphrnts-100-deploy.sh"
+```
+
+### 1. ユニットファイルを再配置して読み込ませる
+
+```bash
+gcloud compute ssh misskey-bots-unified --zone=us-central1-a --project=numbertales-misskey-surver \
+  --tunnel-through-iap --command="\
+sudo install -m 644 /opt/aphrnts-100/deploy/aphrnts-100-bot.service /etc/systemd/system/ && \
+sudo install -m 644 /opt/aphrnts-100/deploy/aphrnts-100-deploy.service /etc/systemd/system/ && \
+sudo install -m 644 /opt/aphrnts-100/deploy/aphrnts-100-deploy.timer /etc/systemd/system/ && \
+sudo install -m 644 /opt/aphrnts-100/deploy/aphrnts-100-watchdog.service /etc/systemd/system/ && \
+sudo install -m 644 /opt/aphrnts-100/deploy/aphrnts-100-watchdog.timer /etc/systemd/system/ && \
+sudo systemctl daemon-reload && \
+sudo systemctl restart aphrnts-100-bot aphrnts-100-deploy.timer aphrnts-100-watchdog.timer"
+```
+
+- `aphrnts-100-bot`の再起動は、`MemoryMax`・`NODE_OPTIONS`・`TimeoutStopSec`を効かせるために必要です（数秒の停止中に届いたメッセージはreplayが回収します）。
+- タイマーの再起動は`RandomizedDelaySec`を反映させるためです。
+
+### 2. 反映を確認する
+
+```bash
+gcloud compute ssh misskey-bots-unified --zone=us-central1-a --project=numbertales-misskey-surver \
+  --tunnel-through-iap --command="\
+systemctl show aphrnts-100-bot -p MemoryMax -p MemoryHigh -p TimeoutStopUSec -p Environment && \
+systemctl show aphrnts-100-deploy.service -p Nice -p CPUWeight -p TimeoutStartUSec && \
+systemctl list-timers 'aphrnts-100-*' --no-pager && \
+systemctl is-active aphrnts-100-bot"
+```
+
+- 期待値: `MemoryMax=1073741824` / `MemoryHigh=805306368` / `TimeoutStopUSec=20s` / `Environment=NODE_OPTIONS=--max-old-space-size=512` / `Nice=10` / `CPUWeight=20` / `TimeoutStartUSec=15min`、`aphrnts-100-bot`は`active`。
+- 1〜2日、`sudo journalctl -u aphrnts-100-bot -u aphrnts-100-deploy -u aphrnts-100-watchdog --since '1 day ago' | grep -E 'watchdog|auto-deploy|oom'`で、`deploy in progress ... skip`が出ること・OOM killが出ていないことを確認すると安心です。
+- 併せて、同居する公式Bot側が平常どおりであること（`pm2 list`等・公式Bot側の手順に従う）も一度見ておくこと。
+
+### 3. ロールバック
+
+| 戻したいもの | 手順 |
+| --- | --- |
+| ユニットの設定 | `master`へrevert PRを出してマージし、自動デプロイで`/opt/aphrnts-100/deploy/`が戻ったあと、上記**手順1**をもう一度実行する（ユニットの再配置は自動化の対象外のため、revertだけでは戻らない） |
+| メモリ上限だけ一時的に外したい | `sudo systemctl set-property --runtime aphrnts-100-bot MemoryMax=infinity MemoryHigh=infinity`（`--runtime`なので次回のVM再起動で元に戻る） |
+| ウォッチドッグのスキップ挙動 | スクリプト側の変更なので、`master`のrevertが自動デプロイで反映されれば戻る（ユニットの再配置は不要） |
 
 ## ローカルPC側の定期同期（Windowsタスクスケジューラ）
 
@@ -115,7 +209,7 @@ gcloud auth list          # 本番VMのプロジェクトへアクセスでき�
 `develop`から`master`へPRを作成し、センパイの承認を得てマージする。マージ後、最大5分で自動デプロイタイマーがVMへ反映する。
 
 ```bash
-gcloud compute ssh aphrnts-100-bot --zone=asia-northeast1-a --project=numbertales-misskey-surver \
+gcloud compute ssh misskey-bots-unified --zone=us-central1-a --project=numbertales-misskey-surver \
   --tunnel-through-iap --command="sudo journalctl -u aphrnts-100-deploy --no-pager -n 20"
 ```
 
@@ -140,7 +234,7 @@ npm run sync:push-remote -- --days=1     # まず当日分だけ転送・取り�
 ### 3. VM側の状態を確認
 
 ```bash
-gcloud compute ssh aphrnts-100-bot --zone=asia-northeast1-a --project=numbertales-misskey-surver \
+gcloud compute ssh misskey-bots-unified --zone=us-central1-a --project=numbertales-misskey-surver \
   --tunnel-through-iap --command="sudo ls -l /opt/aphrnts-100/logs/ && ls -a ~/.aphrnts-100-push"
 ```
 

@@ -102,7 +102,7 @@ npm run sync:pull-remote # Bot→Claude のみ（VM上のbot-digest.mdをロー�
 
 ### 本番VM運用時の注意（`npm run sync:remote`）
 
-本番Bot（[deploy/README.md](./deploy/README.md)参照）はGCE VM上で単独稼働しており、VM上の`logs/`・SQLite（`.cache/session.db`）はいずれもVMのローカルディスクにのみ存在します。デプロイは「GitHub→VM」のpull型一方向のみで、VM→GitHubへ書き戻す経路はありません。加えて`logs/`はgit管理対象外（機微情報のため）なので、**ローカルとVMの間ではどちらの方向にも記録が自動では流れません**（ローカルでの`npm run sync`は、あくまでローカルの`.cache/session.db`だけを対象にします）。
+本番Bot（[deploy/README.md](./deploy/README.md)参照）はGCE VM（`misskey-bots-unified`。NumberTales公式Botと同居する統合VM）上で稼働しており、VM上の`logs/`・SQLite（`.cache/session.db`）はいずれもVMのローカルディスクにのみ存在します。デプロイは「GitHub→VM」のpull型一方向のみで、VM→GitHubへ書き戻す経路はありません。加えて`logs/`はgit管理対象外（機微情報のため）なので、**ローカルとVMの間ではどちらの方向にも記録が自動では流れません**（ローカルでの`npm run sync`は、あくまでローカルの`.cache/session.db`だけを対象にします）。
 
 そのため、本番VM運用時は次の2方向をローカル側から明示的に橋渡しする必要があります。
 
@@ -208,7 +208,7 @@ npm run typecheck       # 型チェックのみ
 | スケジューラ | [`src/scheduler/`](./src/scheduler/) で服薬リマインド・傾向ナッジ・週次サマリを定期実行（JSTの時刻ゲート付き） |
 | 接続の堅牢化 | WebSocket keepalive、指数バックオフ＋ジッタの自動再接続、取りこぼし回収（replay）の定期実行 |
 | 安全設計 | 危機検知（[`src/bot/safety/crisis-detector.ts`](./src/bot/safety/crisis-detector.ts)）とセーフティポリシー、レート制限。結合テストで経路を検証 |
-| 本番運用 | GCE VM上のsystemd常駐、`master`マージ後の自動デプロイ、3層ウォッチドッグ（systemd / VM内 / Cloud Run functions + Cloud Scheduler）。詳細は[deploy/README.md](./deploy/README.md) |
+| 本番運用 | 統合VM（Spot・他Botと同居）上のsystemd常駐、`master`マージ後の自動デプロイ、3層ウォッチドッグ（systemd / VM内 / VM外は公式Bot基盤の外部ウォッチドッグへ相乗り）。詳細は[deploy/README.md](./deploy/README.md) |
 
 ### 機微情報を公開しない設計
 
