@@ -8,8 +8,11 @@
 # 止まってしまった場合も、ここでreset-failed→restartして復帰させる。
 set -euo pipefail
 
-APP_DIR=/opt/aphrnts-100
-SERVICE_NAME=aphrnts-100-bot
+# 既定値は本番VMの構成。検証時のみ環境変数で差し替える（本番では未設定のまま使う）。
+APP_DIR=${APP_DIR:-/opt/aphrnts-100}
+SERVICE_NAME=${SERVICE_NAME:-aphrnts-100-bot}
+# 自動デプロイのユニット。ビルド中は再起動を見送るために状態を見る（下記 is_deploy_running）。
+DEPLOY_UNIT=${DEPLOY_UNIT:-aphrnts-100-deploy.service}
 HEARTBEAT_PATH="$APP_DIR/.cache/heartbeat.json"
 ENV_FILE="$APP_DIR/.env"
 # heartbeatは既定30秒間隔で書かれる想定。3分（6回分）更新がなければ異常とみなす。
@@ -23,6 +26,16 @@ LOG_PREFIX="[watchdog]"
 
 is_unit_failed() {
   [ "$(systemctl is-failed "$SERVICE_NAME" 2>/dev/null || true)" = "failed" ]
+}
+
+# 自動デプロイ（npm ci → build → 再起動）が実行中かどうか。
+# Type=oneshotのユニットは実行中の状態が active ではなく activating になるため、
+# `is-active --quiet` だけでは検知できない。停止処理中も含めて幅広く拾う。
+is_deploy_running() {
+  case "$(systemctl is-active "$DEPLOY_UNIT" 2>/dev/null || true)" in
+    active | activating | reloading | deactivating) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 restart_service() {
@@ -51,6 +64,15 @@ notify_owner() {
     -d "$(printf '{"i":"%s","toUserId":"%s","text":"%s"}' "$misskey_token" "$owner_id" "$text")" \
     >/dev/null 2>&1 || echo "$LOG_PREFIX notify failed (ignored)"
 }
+
+# 自動デプロイ中は、Botが停止したままheartbeatが更新されない時間帯が生じる。
+# 共用VM（misskey-bots-unified）ではCPUを同居Botと分け合うぶん npm ci → tsc が長引き、
+# STALE_THRESHOLD_SEC（3分）を超えることがある。そこへ再起動を挟むとビルドと競合するため、
+# デプロイ実行中は判定自体を見送る（デプロイ側が最後に必ず再起動する）。
+if is_deploy_running; then
+  echo "$LOG_PREFIX deploy in progress ($DEPLOY_UNIT), skip"
+  exit 0
+fi
 
 if is_unit_failed; then
   restart_service "service in failed state"
