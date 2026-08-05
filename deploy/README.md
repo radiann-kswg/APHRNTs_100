@@ -1,6 +1,6 @@
 # deploy/ — GCE VM上の本番運用設定
 
-本リポジトリのMisskey Bot（`src/`）を、Google Compute Engineの本番VM（`aphrnts-100-bot` / プロジェクト`numbertales-misskey-surver` / `asia-northeast1-a`）上で常駐運用するための設定一式です。VMを再構築する場合や、設定内容を確認したい場合の正典として、実際にVMへ配置している内容をここに記録しています。
+本リポジトリのMisskey Bot（`src/`）を、Google Compute Engineの本番VM（**`misskey-bots-unified`** / プロジェクト`numbertales-misskey-surver` / `us-central1-a` / **Spot** e2-medium）上で常駐運用するための設定一式です。2026-08のコスト削減リファクタリング（Phase 3）で旧VM `aphrnts-100-bot`（asia-northeast1-a）から移設され、NumberTales公式Bot（PM2常駐）と同居しています。本Botのユニット構成・配置先（`/opt/aphrnts-100`）・実行ユーザー（`aphrnts-bot`）は移設前と同一です。VMを再構築する場合や、設定内容を確認したい場合の正典として、実際にVMへ配置している内容をここに記録しています。
 
 VM自体は `/opt/aphrnts-100` に本リポジトリ（`master`ブランチ）をクローンし、専用の非rootユーザー`aphrnts-bot`で稼働しています。`.env`は`.gitignore`対象のため、VM側で別途配置してください。
 
@@ -42,7 +42,7 @@ VM自体は `/opt/aphrnts-100` に本リポジトリ（`master`ブランチ）�
 
 ### VM自体の停止・フリーズへの備え（レイヤー3）と復帰報告
 
-上記ウォッチドッグはVM内で動くため、**VM自体**が停止・フリーズした場合は救えない。この層（GCE外部ウォッチドッグ）の導入計画・手順は [docs/gce-watchdog-layer3.md](../docs/gce-watchdog-layer3.md) を参照。また、VMごと復旧した場合はウォッチドッグの再起動通知が飛ばないため、Bot本体が起動時に長時間ダウン（`RECOVERY_NOTICE_THRESHOLD_MS`・既定10分以上）を検知するとオーナーへ復帰報告のチャットを送る（`src/utils/recovery-notice.ts`）。
+上記ウォッチドッグはVM内で動くため、**VM自体**が停止・フリーズした場合は救えない。この層は、統合VM `misskey-bots-unified` では公式Botの GCE外部ウォッチドッグ（`numbertales-gce-watchdog` / us-central1。**Spotプリエンプト後の自動再起動も担当**）に一本化されているため、本リポジトリ個別での導入は不要（経緯・旧計画は [docs/gce-watchdog-layer3.md](../docs/gce-watchdog-layer3.md) を参照）。また、VMごと復旧した場合はウォッチドッグの再起動通知が飛ばないため、Bot本体が起動時に長時間ダウン（`RECOVERY_NOTICE_THRESHOLD_MS`・既定10分以上）を検知するとオーナーへ復帰報告のチャットを送る（`src/utils/recovery-notice.ts`）。
 
 ## Misskeyストリームの接続維持（keepalive・自動再接続）
 
@@ -115,7 +115,7 @@ gcloud auth list          # 本番VMのプロジェクトへアクセスでき�
 `develop`から`master`へPRを作成し、センパイの承認を得てマージする。マージ後、最大5分で自動デプロイタイマーがVMへ反映する。
 
 ```bash
-gcloud compute ssh aphrnts-100-bot --zone=asia-northeast1-a --project=numbertales-misskey-surver \
+gcloud compute ssh misskey-bots-unified --zone=us-central1-a --project=numbertales-misskey-surver \
   --tunnel-through-iap --command="sudo journalctl -u aphrnts-100-deploy --no-pager -n 20"
 ```
 
@@ -140,7 +140,7 @@ npm run sync:push-remote -- --days=1     # まず当日分だけ転送・取り�
 ### 3. VM側の状態を確認
 
 ```bash
-gcloud compute ssh aphrnts-100-bot --zone=asia-northeast1-a --project=numbertales-misskey-surver \
+gcloud compute ssh misskey-bots-unified --zone=us-central1-a --project=numbertales-misskey-surver \
   --tunnel-through-iap --command="sudo ls -l /opt/aphrnts-100/logs/ && ls -a ~/.aphrnts-100-push"
 ```
 

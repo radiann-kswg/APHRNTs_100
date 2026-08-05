@@ -1,7 +1,11 @@
 # レイヤー3: GCE外部ウォッチドッグ（公式Bot基盤への相乗り）
 
 > 作成日: 2026-07-20
-> ステータス: 計画（デプロイ未実施。実施はセンパイの承認を得てからローカルの gcloud CLI で行う）
+> ステータス: **クローズ（2026-08）** — Phase 3 の bot VM統合により本計画は不要化。
+> 統合VM `misskey-bots-unified`（us-central1-a）は公式Botの `numbertales-gce-watchdog`（us-central1）が
+> 監視・自動復旧（Spotプリエンプト後の再起動を含む）するため、個別の関数追加は行わない。
+> もし本書の手順で `aphrnts-100-gce-watchdog` / `aphrnts-100-vm-watchdog` を既にデプロイ済みの場合は、
+> 末尾のロールバック手順で削除すること（asia-northeast1 の Cloud Run 課金確認も併せて）。以下は旧計画の記録。
 
 ## 背景・目的
 
