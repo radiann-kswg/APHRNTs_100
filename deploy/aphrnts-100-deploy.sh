@@ -21,6 +21,7 @@ LOG_PREFIX="[auto-deploy]"
 
 cd "$APP_DIR"
 
+sudo -u "$APP_USER" mkdir -p "$(dirname "$DEPLOYED_REV_PATH")"
 sudo -u "$APP_USER" git fetch origin master
 LOCAL_REV=$(sudo -u "$APP_USER" git rev-parse HEAD)
 REMOTE_REV=$(sudo -u "$APP_USER" git rev-parse origin/master)
