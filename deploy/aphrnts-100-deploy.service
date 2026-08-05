@@ -4,3 +4,15 @@ Description=APHRNTs_100 auto-deploy check (pull latest master and restart the bo
 [Service]
 Type=oneshot
 ExecStart=/bin/bash /opt/aphrnts-100/deploy/aphrnts-100-deploy.sh
+# 共用VM（misskey-bots-unified / e2-medium・2vCPU）では、npm ci と tsc のビルドが
+# 同居Bot（公式Bot・PM2常駐）の応答を巻き添えにしうる。デプロイは数分遅れても支障がないため、
+# CPU・I/Oの優先度を下げて「空いているときに進む」ようにする。
+Nice=10
+CPUWeight=20
+IOWeight=20
+# ビルド中のメモリ使用を穏やかに抑える。ハード上限（MemoryMax）にすると npm ci 自体が
+# OOM killされてデプロイが進まなくなるため、ソフト上限のみにしている。
+MemoryHigh=1G
+# Type=oneshotは既定でタイムアウト無し。ハングしたnpmがユニットをactivatingのまま
+# 居座るとデプロイが永久に止まり（ウォッチドッグ側のスキップ条件にも居座る）ため上限を設ける。
+TimeoutStartSec=15min

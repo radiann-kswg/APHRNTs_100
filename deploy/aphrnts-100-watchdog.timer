@@ -4,6 +4,9 @@ Description=Run APHRNTs_100 watchdog check every 3 minutes
 [Timer]
 OnBootSec=3min
 OnUnitActiveSec=3min
+# 自動デプロイのタイマー（5分周期）と発火が噛み合う瞬間をずらす。
+# 復帰の遅れが問題になる用途なので、揺らぎはデプロイ側より小さくしている。
+RandomizedDelaySec=20
 Persistent=true
 
 [Install]
