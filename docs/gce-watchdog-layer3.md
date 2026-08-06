@@ -89,9 +89,12 @@ gcloud functions logs read aphrnts-100-gce-watchdog --region=asia-northeast1 --l
 （[src/utils/recovery-notice.ts](../src/utils/recovery-notice.ts)）:
 
 - 起動時に前回 `heartbeat.json` の最終更新時刻を読み、`RECOVERY_NOTICE_THRESHOLD_MS`
-  （既定10分・`.env`で調整可・0で無効）以上空いていたら、ダウン時間の目安を添えて
+  （既定45分・`.env`で調整可・0で無効）以上空いていたら、ダウン時間の目安を添えて
   オーナーへ一対一チャットで一言報告する。
 - レイヤー2のwatchdog再起動（ダウン数十秒）では発火しないため、既存のwatchdog通知と重複しない。
+- 既定は当初10分だったが、Spotプリエンプトによる10〜15分程度のダウンが日に何度も起きて
+  復帰報告が連投される状態になったため、45分へ引き上げた。45分未満のダウンは
+  replay による取りこぼし回収に任せ、報告は送らない。
 - 切断中に届いたメッセージは従来どおり replay（[deploy/README.md](../deploy/README.md)参照）が回収する。
 
 ## 撤去する場合

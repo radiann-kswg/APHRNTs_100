@@ -29,8 +29,11 @@ const envSchema = z.object({
   HEARTBEAT_INTERVAL_MS: z.coerce.number().int().positive().default(30000),
   // 復帰報告: 起動時に前回heartbeatとの間隔がこの値（ミリ秒）以上ならオーナーへ
   // 「復帰したぞ」とチャットで一言報告する（VMごと再起動などwatchdog通知が飛ばないケース向け）。
-  // 0で無効。既定10分（レイヤー2のwatchdog再起動＝数十秒程度では発火しない値にすること）。
-  RECOVERY_NOTICE_THRESHOLD_MS: z.coerce.number().int().nonnegative().default(600000),
+  // 0で無効。既定45分（レイヤー2のwatchdog再起動＝数十秒程度では発火しない値にすること）。
+  // 既定を10分から45分へ引き上げた経緯: Spotプリエンプトに伴う10〜15分程度のダウンが
+  // 日に何度も起き、そのたびに復帰報告が届いて通知過多になっていたため。
+  // 45分未満のダウンは replay による取りこぼし回収に任せ、報告は送らない。
+  RECOVERY_NOTICE_THRESHOLD_MS: z.coerce.number().int().nonnegative().default(2700000),
 
   NODE_ENV: z.enum(["development", "production"]).default("development"),
   LOG_LEVEL: z.enum(["error", "warn", "info", "debug"]).default("info"),
