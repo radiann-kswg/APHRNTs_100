@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { BehavioralActivationStore } from "../storage/behavioral-activation-store.js";
 import type { GratitudeStore } from "../storage/gratitude-store.js";
 import type { ThoughtRecordStore } from "../storage/thought-record-store.js";
-import { claudeLogDate } from "./log-importer.js";
+import { claudeLogDate, sectionBody } from "./log-importer.js";
 
 // ---------------------------------------------------------------------------
 // Claude→Bot方向のCBT記録逆マージ: logs/ の「## 思考記録」「## 行動活性化」「## 感謝日記」を
@@ -27,12 +27,6 @@ export function jstDayRange(date: string): { fromIso: string; toIso: string } {
 /** 取り込んだ記録に与える created_at（その日の正午JST。時刻情報はログに無いため固定値） */
 export function jstNoonOf(date: string): Date {
   return new Date(`${date}T12:00:00+09:00`);
-}
-
-/** 見出し（`## 思考記録` など・「（モヤモヤがあった日だけ）」等の接尾辞も許容）の中身を取り出す */
-function sectionBody(markdown: string, headingPattern: string): string | undefined {
-  const re = new RegExp(`##\\s*${headingPattern}[^\\n]*\\n([\\s\\S]*?)(?=\\n##\\s|$)`);
-  return markdown.match(re)?.[1];
 }
 
 /** マーカーコメントを除いた実質的な中身（空なら undefined） */

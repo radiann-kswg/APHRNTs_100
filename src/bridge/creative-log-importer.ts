@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CreativeLogStore } from "../storage/creative-log-store.js";
-import { claudeLogDate } from "./log-importer.js";
+import { claudeLogDate, sectionBody } from "./log-importer.js";
 
 // ---------------------------------------------------------------------------
 // Claude→Bot方向の創作進捗・タスク記録の取り込み: logs/ の creative-log 区間
@@ -20,9 +20,9 @@ export interface ParsedCreativeLog {
   tasks?: string;
 }
 
-function sectionBody(markdown: string, headingPattern: string): string | undefined {
-  const re = new RegExp(`##\\s*${headingPattern}[^\\n]*\\n([\\s\\S]*?)(?=\\n##\\s|$)`);
-  const body = markdown.match(re)?.[1];
+/** セクションの中身からマーカーコメントを除いてトリムする（空なら undefined） */
+function strippedSectionBody(markdown: string, headingPattern: string): string | undefined {
+  const body = sectionBody(markdown, headingPattern);
   if (body === undefined) return undefined;
   const stripped = body.replace(/<!--[\s\S]*?-->/g, "").trim();
   return stripped.length > 0 ? stripped : undefined;
@@ -37,9 +37,9 @@ export function parseCreativeLog(markdown: string): ParsedCreativeLog {
   const marker = markdown.match(/<!--\s*creative-log:start\s*-->([\s\S]*?)<!--\s*creative-log:end\s*-->/);
   const scope = marker?.[1] ?? markdown;
   const parsed: ParsedCreativeLog = {};
-  const progress = sectionBody(scope, "創作活動の進捗");
+  const progress = strippedSectionBody(scope, "創作活動の進捗");
   if (progress !== undefined) parsed.progress = progress;
-  const tasks = sectionBody(scope, "取り組んだタスク");
+  const tasks = strippedSectionBody(scope, "取り組んだタスク");
   if (tasks !== undefined) parsed.tasks = tasks;
   return parsed;
 }

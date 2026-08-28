@@ -204,18 +204,24 @@ export class MisskeyClient {
         if (!typed.toUserId) {
           return;
         }
-        void this.myUserId().then((myId) => {
-          // Botが自ら送信したメッセージがストリームでエコーされる場合に備えたガード
-          if (typed.fromUserId === myId) {
-            return;
-          }
-          this.onChatMessage?.({
-            id: typed.id,
-            fromUserId: typed.fromUserId,
-            text: typed.text ?? "",
-            createdAt: typed.createdAt,
+        this.myUserId()
+          .then((myId) => {
+            // Botが自ら送信したメッセージがストリームでエコーされる場合に備えたガード
+            if (typed.fromUserId === myId) {
+              return;
+            }
+            this.onChatMessage?.({
+              id: typed.id,
+              fromUserId: typed.fromUserId,
+              text: typed.text ?? "",
+              createdAt: typed.createdAt,
+            });
+          })
+          .catch((error: unknown) => {
+            // catch必須: ここで漏らすとunhandledRejectionでプロセスごと落ちる。
+            // 取りこぼした分は定期replayがREST API経由で回収する。
+            this.logger.warn("[misskey] チャット受信処理で自ユーザーIDの取得に失敗した（replayで回収される）", error);
           });
-        });
       });
     }
   }
@@ -403,7 +409,14 @@ export class MisskeyClient {
   }
 
   private myUserId(): Promise<string> {
-    this.myUserIdPromise ??= this.api.request("i", {}).then((me) => me.id);
+    // 失敗したPromiseをキャッシュしたままにすると以後の呼び出しが全て失敗し続けるため、失敗時は破棄して次回再試行する
+    this.myUserIdPromise ??= this.api.request("i", {}).then(
+      (me) => me.id,
+      (error: unknown) => {
+        this.myUserIdPromise = null;
+        throw error;
+      },
+    );
     return this.myUserIdPromise;
   }
 

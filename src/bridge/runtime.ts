@@ -1,6 +1,7 @@
 import type { MessageHandler } from "../bot/pipeline.js";
 import { CLAUDE_BRIDGE_NOTES_DAYS } from "../config/constants.js";
 import { ClaudeNotesStore } from "../storage/claude-notes-store.js";
+import { toJstDateString } from "../utils/date.js";
 import { buildClaudeNotesSection } from "./notes-section.js";
 import { runExport, runImport, runSync, type BridgeSyncDeps, type BridgeSyncResult } from "./sync.js";
 
@@ -32,7 +33,8 @@ export function createBridgeRuntime(deps: BridgeSyncDeps): BridgeRuntime {
 
   const currentNotesSection = (): string | undefined => {
     const since = new Date(now().getTime() - CLAUDE_BRIDGE_NOTES_DAYS * 24 * 60 * 60 * 1000);
-    const rows = notesStore.listSince(since.toISOString().slice(0, 10));
+    // ノートのdate列はJST日付のため、窓の境界もJSTで切る
+    const rows = notesStore.listSince(toJstDateString(since));
     return buildClaudeNotesSection(rows);
   };
 
