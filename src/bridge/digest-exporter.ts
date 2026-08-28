@@ -32,7 +32,8 @@ function fmt(value: number | null, suffix = "/10"): string {
 export function buildBotDigest(db: Database, options: DigestOptions): string {
   const now = options.now ?? new Date();
   const since = new Date(now.getTime() - options.days * 24 * 60 * 60 * 1000);
-  const sinceDate = since.toISOString().slice(0, 10);
+  // date列（JST日付）の比較はJSTで、created_at（ISOタイムスタンプ）の比較はISOのまま切る
+  const sinceDate = toJstDateString(since);
   const sinceIso = since.toISOString();
 
   const owner = options.ownerUserId ?? "";
@@ -76,7 +77,7 @@ export function buildBotDigest(db: Database, options: DigestOptions): string {
     "> Claude(Desktop / Code)はセッション開始時にこのファイルを読み、Misskey Bot側で記録された内容を会話の文脈に反映する。",
     "",
     `- 生成日時: ${now.toISOString()}`,
-    `- 対象期間: ${sinceDate} 〜 ${now.toISOString().slice(0, 10)}（直近${options.days}日）`,
+    `- 対象期間: ${sinceDate} 〜 ${toJstDateString(now)}（直近${options.days}日）`,
     ...(owner ? [`- 対象ユーザー: ${owner}（BOT_OWNER_USER_ID による限定）`] : []),
     "",
   ];

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   MisskeyClient,
   type ClientLogger,
+  type IncomingChatMessage,
   type MentionNote,
   type RawStream,
   type StreamFactory,
@@ -12,6 +13,7 @@ interface MockStream {
   emitConnected(): void;
   emitDisconnected(): void;
   emitMention(payload: unknown): void;
+  emitChat(payload: unknown): void;
   pingCount: number;
   closed: boolean;
   channelSubscribed: boolean;
@@ -54,6 +56,7 @@ function createStreamHarness(): { factory: StreamFactory; streams: MockStream[] 
       emitConnected: () => connectedHandlers.forEach((handler) => handler()),
       emitDisconnected: () => disconnectedHandlers.forEach((handler) => handler()),
       emitMention: (payload) => (channelHandlers["mention"] ?? []).forEach((handler) => handler(payload)),
+      emitChat: (payload) => (channelHandlers["newChatMessage"] ?? []).forEach((handler) => handler(payload)),
     };
     streams.push(mock);
     return mock.raw;
@@ -253,5 +256,72 @@ describe("MisskeyClient keepalive & reconnection", () => {
     first.emitDisconnected();
     vi.advanceTimersByTime(60000);
     expect(harness.streams).toHaveLength(1);
+  });
+});
+
+describe("MisskeyClient chat message reception", () => {
+  it("survives a myUserId API failure without crashing and retries on the next message", async () => {
+    const harness = createStreamHarness();
+    const logger = createSpyLogger();
+    const client = new MisskeyClient({
+      host: "https://example.test",
+      token: "token",
+      keepalive: KEEPALIVE,
+      logger,
+      createStream: harness.factory,
+    });
+    const received: IncomingChatMessage[] = [];
+    client.connect(
+      () => {},
+      (message) => received.push(message),
+    );
+    const stream = latest(harness.streams);
+    stream.emitConnected();
+
+    // 1回目のi APIは失敗、2回目以降は成功するようにスタブする
+    const request = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("api down"))
+      .mockResolvedValue({ id: "bot-self" });
+    (client as unknown as { api: { request: typeof request } }).api = { request };
+
+    // 失敗時: unhandledRejectionにならず、warnを残してメッセージは破棄（replayが回収する前提）
+    stream.emitChat({ id: "m1", fromUserId: "u1", toUserId: "bot-self", text: "hi", createdAt: "2026-01-01T00:00:00Z" });
+    await vi.waitFor(() => expect(logger.warns.some((m) => m.includes("自ユーザーIDの取得に失敗"))).toBe(true));
+    expect(received).toEqual([]);
+
+    // 失敗したPromiseがキャッシュされず、次のメッセージで再試行して届く
+    stream.emitChat({ id: "m2", fromUserId: "u1", toUserId: "bot-self", text: "again", createdAt: "2026-01-01T00:01:00Z" });
+    await vi.waitFor(() => expect(received).toHaveLength(1));
+    expect(received[0]?.id).toBe("m2");
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores messages echoed back from the bot itself", async () => {
+    const harness = createStreamHarness();
+    const client = new MisskeyClient({
+      host: "https://example.test",
+      token: "token",
+      keepalive: KEEPALIVE,
+      createStream: harness.factory,
+      logger: createSpyLogger(),
+    });
+    const received: IncomingChatMessage[] = [];
+    client.connect(
+      () => {},
+      (message) => received.push(message),
+    );
+    const stream = latest(harness.streams);
+    stream.emitConnected();
+
+    const request = vi.fn().mockResolvedValue({ id: "bot-self" });
+    (client as unknown as { api: { request: typeof request } }).api = { request };
+
+    stream.emitChat({ id: "m1", fromUserId: "bot-self", toUserId: "u1", text: "echo", createdAt: "2026-01-01T00:00:00Z" });
+    stream.emitChat({ id: "m2", fromUserId: "u1", toUserId: "bot-self", text: "hi", createdAt: "2026-01-01T00:01:00Z" });
+    await vi.waitFor(() => expect(received).toHaveLength(1));
+    expect(received[0]?.id).toBe("m2");
+    // 自ユーザーIDのPromiseは成功時にキャッシュされ、i APIは1回しか呼ばれない
+    expect(request).toHaveBeenCalledTimes(1);
   });
 });

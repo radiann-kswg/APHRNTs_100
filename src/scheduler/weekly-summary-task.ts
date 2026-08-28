@@ -3,7 +3,7 @@ import type { CheckinStore } from "../storage/checkin-store.js";
 import type { GratitudeStore } from "../storage/gratitude-store.js";
 import type { MedicationStore } from "../storage/medication-store.js";
 import type { ThoughtRecordStore } from "../storage/thought-record-store.js";
-import { toJstDayOfWeek } from "../utils/date.js";
+import { toJstDateString, toJstDayOfWeek } from "../utils/date.js";
 import { shouldRunDailyNow } from "./schedule-utils.js";
 
 export interface WeeklySummaryDeps {
@@ -26,7 +26,8 @@ export function shouldRunNow(lastRunAt: Date | null, now: Date, dayOfWeek: numbe
 
 export function buildWeeklyTrend(userId: string, deps: WeeklySummaryDeps, now: Date = new Date()): string {
   const sinceDate = new Date(now.getTime() - SEVEN_DAYS_MS);
-  const sinceDateStr = sinceDate.toISOString().slice(0, 10);
+  // date列（JST日付）の比較はJSTで、created_at（ISOタイムスタンプ）の比較はISOのまま切る
+  const sinceDateStr = toJstDateString(sinceDate);
   const sinceIso = sinceDate.toISOString();
 
   const checkins = deps.checkinStore.listSince(userId, sinceDateStr);

@@ -3,6 +3,7 @@ import type { BotStateStore } from "../storage/bot-state-store.js";
 import type { CheckinRow, CheckinStore } from "../storage/checkin-store.js";
 import type { MedicationRow, MedicationStore } from "../storage/medication-store.js";
 import type { SessionStore } from "../storage/session-store.js";
+import { toJstDateString } from "../utils/date.js";
 import { shouldRunDailyNow } from "./schedule-utils.js";
 import type { ScheduledTask } from "./task-scheduler.js";
 
@@ -44,8 +45,9 @@ export interface TrendSignal {
  * サンプル数が少ない（各半期3件未満）場合は気分傾向を判定材料に含めない。
  */
 export function detectTrend(checkins: CheckinRow[], medications: MedicationRow[], now: Date): TrendSignal {
-  const priorStartStr = new Date(now.getTime() - FOURTEEN_DAYS_MS).toISOString().slice(0, 10);
-  const recentStartStr = new Date(now.getTime() - SEVEN_DAYS_MS).toISOString().slice(0, 10);
+  // DBのdate列はJST日付のため、窓の境界もJSTで切る（UTCだとJST 0〜9時の実行で窓が1日ズレる）
+  const priorStartStr = toJstDateString(new Date(now.getTime() - FOURTEEN_DAYS_MS));
+  const recentStartStr = toJstDateString(new Date(now.getTime() - SEVEN_DAYS_MS));
 
   const priorMoods = checkins
     .filter((row) => row.date >= priorStartStr && row.date < recentStartStr)
@@ -119,7 +121,7 @@ export function createTrendNudgeTask(deps: TrendNudgeTaskDeps): ScheduledTask {
         return;
       }
 
-      const sinceDate = new Date(now.getTime() - FOURTEEN_DAYS_MS).toISOString().slice(0, 10);
+      const sinceDate = toJstDateString(new Date(now.getTime() - FOURTEEN_DAYS_MS));
       const userIds = deps.sessionStore.listKnownUserIds();
 
       for (const userId of userIds) {

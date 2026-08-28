@@ -112,6 +112,35 @@ describe("detectTrend", () => {
     expect(signal.priorAvgMood).toBeNull();
     expect(signal.triggered).toBe(false);
   });
+
+  it("cuts the window boundary by JST date, not UTC, when run in the JST early morning", () => {
+    // JST 2026-01-16 03:00（= UTC 2026-01-15 18:00）。UTC日付で切るとrecent窓が2026-01-08開始にズレ、
+    // prior側の01-08の記録がrecentに漏れて検知を取りこぼす（回帰テスト）
+    const now = new Date("2026-01-15T18:00:00Z");
+    const db = openDatabase(":memory:");
+    const checkinStore = new CheckinStore(db);
+    const medicationStore = new MedicationStore(db);
+
+    checkinStore.upsert({ userId: "u1", date: "2026-01-06", mood: 8 });
+    checkinStore.upsert({ userId: "u1", date: "2026-01-07", mood: 8 });
+    checkinStore.upsert({ userId: "u1", date: "2026-01-08", mood: 8 });
+    checkinStore.upsert({ userId: "u1", date: "2026-01-09", mood: 4 });
+    checkinStore.upsert({ userId: "u1", date: "2026-01-10", mood: 4 });
+    checkinStore.upsert({ userId: "u1", date: "2026-01-11", mood: 4 });
+
+    medicationStore.upsert({ userId: "u1", date: "2026-01-09", morningTaken: false });
+    medicationStore.upsert({ userId: "u1", date: "2026-01-10", nightTaken: false });
+    medicationStore.upsert({ userId: "u1", date: "2026-01-11", middayTaken: false });
+
+    const signal = detectTrend(
+      checkinStore.listSince("u1", "2026-01-01"),
+      medicationStore.listSince("u1", "2026-01-01"),
+      now,
+    );
+    expect(signal.priorAvgMood).toBe(8);
+    expect(signal.recentAvgMood).toBe(4);
+    expect(signal.triggered).toBe(true);
+  });
 });
 
 describe("buildTrendNudgeMessage", () => {

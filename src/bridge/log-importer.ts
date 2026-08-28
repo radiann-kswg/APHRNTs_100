@@ -14,6 +14,15 @@ export function claudeLogDate(filename: string): string | undefined {
   return LOG_FILE_PATTERN.exec(filename)?.[1];
 }
 
+/**
+ * セッション記録の見出し（`## 思考記録` など。「（モヤモヤがあった日だけ）」等の接尾辞も許容）の
+ * 中身を取り出す。書式の正典は logs/README.md。CBT・創作進捗の各importerで共有する。
+ */
+export function sectionBody(markdown: string, headingPattern: string): string | undefined {
+  const re = new RegExp(`##\\s*${headingPattern}[^\\n]*\\n([\\s\\S]*?)(?=\\n##\\s|$)`);
+  return markdown.match(re)?.[1];
+}
+
 export interface ImportResult {
   /** 取り込んだ（新規または上書きした）ファイル数 */
   imported: number;
