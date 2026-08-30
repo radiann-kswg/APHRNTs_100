@@ -5,6 +5,7 @@ import { RateLimiter } from "./ratelimit/index.js";
 import { buildCrisisResponse, checkForCrisis } from "./safety/crisis-detector.js";
 import { ALL_TOOLS } from "./tools/definitions.js";
 import { createToolExecutor, type ToolHandlerDeps } from "./tools/handlers.js";
+import { containsLeakedToolCallMarkup, salvageLeakedToolCalls } from "./tools/xml-call-salvage.js";
 
 export type Channel = "misskey" | "misskey-chat" | "cli";
 
@@ -83,16 +84,33 @@ export function createMessagePipeline(deps: PipelineDeps): MessageHandler {
       executeTool,
     });
 
-    // 4. 空応答の安全網: AIProviderが空テキストを返すと、呼び出し側（chat/mentionハンドラ）は
+    // 4. XML漏出ツール呼び出しの回収: LLMがツール呼び出しを正規のAPI形式ではなく
+    //    XMLテキストとして本文に書いてしまうことがある（実際に一対一チャットで生XMLが
+    //    そのまま投稿され、保存も実行されない不具合が起きた）。本文からパースして
+    //    本来どおり実行し、XMLは本文から除去する。
+    let replyText = result.text;
+    let toolInvocationCount = result.toolInvocations.length;
+    if (containsLeakedToolCallMarkup(replyText)) {
+      const salvage = salvageLeakedToolCalls(replyText, ALL_TOOLS);
+      deps.logger?.warn(
+        `応答本文にXML形式のツール呼び出しが漏出したため回収した（calls=${salvage.calls.length}, channel=${channel}）`,
+      );
+      for (const call of salvage.calls) {
+        await executeTool(call.name, call.input);
+        toolInvocationCount++;
+      }
+      replyText = salvage.text;
+    }
+
+    // 5. 空応答の安全網: AIProviderが空テキストを返すと、呼び出し側（chat/mentionハンドラ）は
     //    送信をスキップし、メッセージは処理済み扱いになって再試行もされない（＝返信が永遠に
     //    来ない）。ここで定型文にフォールバックし、無言の正常終了を根絶する。
-    let replyText = result.text;
     if (replyText.length === 0) {
       deps.logger?.warn(
-        `AIProviderが空の応答を返したためフォールバック文を使う（channel=${channel}, toolInvocations=${result.toolInvocations.length}）`,
+        `AIProviderが空の応答を返したためフォールバック文を使う（channel=${channel}, toolInvocations=${toolInvocationCount}）`,
       );
       replyText =
-        result.toolInvocations.length > 0
+        toolInvocationCount > 0
           ? "記録は済ませたぞ、センパイ。……すまない、返事の文章がうまく出てこなかった。内容は確かに受け取ってるから、安心してくれ。"
           : "すまない、センパイ。返事の生成にしくじったみたいだ。もう一度話しかけてくれると助かる。";
     }
