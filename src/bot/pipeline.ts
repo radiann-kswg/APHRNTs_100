@@ -1,6 +1,8 @@
 import type { AIProvider, ChatMessage } from "../ai/provider.js";
 import type { SafetyIncidentStore } from "../storage/safety-incident-store.js";
 import type { SessionStore } from "../storage/session-store.js";
+import type { UserPreferenceStore } from "../storage/user-preference-store.js";
+import { buildCrisisListeningModePrompt } from "./character/safety-policy.js";
 import { RateLimiter } from "./ratelimit/index.js";
 import { buildCrisisResponse, checkForCrisis } from "./safety/crisis-detector.js";
 import { ALL_TOOLS } from "./tools/definitions.js";
@@ -29,6 +31,12 @@ export interface PipelineDeps {
   sessionStore: SessionStore;
   rateLimiter: RateLimiter;
   safetyIncidentStore: SafetyIncidentStore;
+  /**
+   * 省略可。ユーザーごとの「相談窓口案内」設定を参照する。未指定なら全ユーザー既定（有効）扱い。
+   * 無効のユーザーで危機キーワードが検知された場合、定型の窓口案内で短絡せず、
+   * 傾聴優先モードの指示を付けてLLMに応答させる（レートリミットは免除）。
+   */
+  userPreferenceStore?: UserPreferenceStore;
   toolHandlerDeps: ToolHandlerDeps;
   now: () => Date;
   /**
@@ -50,18 +58,29 @@ export function createMessagePipeline(deps: PipelineDeps): MessageHandler {
   return async function handleMessage(userId, text, channel) {
     const now = deps.now();
 
-    // 1. 危機検知（最優先・決定論的・LLMを介さない）
+    // 1. 危機検知（最優先・決定論的）。インシデントは設定によらず必ず記録する。
+    //    相談窓口案内が有効（既定）なら、LLMを介さず定型の窓口案内で短絡する。
+    //    無効に設定したユーザーは、傾聴・相談を優先する指示を付けてLLMに応答させる。
     const crisisCheck = checkForCrisis(text);
+    const hotlineGuidanceEnabled = deps.userPreferenceStore?.isCrisisHotlineEnabled(userId) ?? true;
     if (crisisCheck.triggered) {
       deps.safetyIncidentStore.record(userId, crisisCheck.matchedTerms, channel, now);
-      const replyText = buildCrisisResponse();
-      deps.sessionStore.appendExchange(userId, text, replyText, now);
-      return { replyText, suppressed: false };
+      if (hotlineGuidanceEnabled) {
+        const replyText = buildCrisisResponse();
+        deps.sessionStore.appendExchange(userId, text, replyText, now);
+        return { replyText, suppressed: false };
+      }
+      deps.logger?.info(
+        `危機キーワードを検知したが、相談窓口案内が無効のユーザーのため傾聴優先モードで応答する（channel=${channel}）`,
+      );
     }
+    const listeningMode = crisisCheck.triggered && !hotlineGuidanceEnabled;
 
-    // 2. レートリミット判定（直近のやり取りがあれば緩和）
+    // 2. レートリミット判定（直近のやり取りがあれば緩和。傾聴優先モードの危機応答は免除）
     const lastInteractionAt = deps.sessionStore.getLastInteractionAt(userId);
-    const decision = deps.rateLimiter.check(userId, lastInteractionAt, now);
+    const decision = listeningMode
+      ? { allowed: true, exempt: true }
+      : deps.rateLimiter.check(userId, lastInteractionAt, now);
     if (!decision.allowed) {
       // 抑制は仕様どおりの挙動だが、外から見ると「返信が来ない」ため必ずログに残す
       deps.logger?.info(
@@ -75,8 +94,11 @@ export function createMessagePipeline(deps: PipelineDeps): MessageHandler {
     const messages: ChatMessage[] = [...history, { role: "user", content: text }];
 
     const executeTool = createToolExecutor(userId, deps.toolHandlerDeps, () => now);
-    const systemPrompt =
+    const baseSystemPrompt =
       typeof deps.systemPrompt === "function" ? deps.systemPrompt(userId, channel, now) : deps.systemPrompt;
+    const systemPrompt = listeningMode
+      ? `${baseSystemPrompt}\n\n---\n\n${buildCrisisListeningModePrompt(crisisCheck.matchedTerms)}`
+      : baseSystemPrompt;
     const result = await deps.aiProvider.generateReply({
       systemPrompt,
       messages,

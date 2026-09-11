@@ -140,6 +140,22 @@ export const SAVE_ACTIVITY_TOOL: ToolDefinition = {
   },
 };
 
+export const SET_CRISIS_HOTLINE_PREFERENCE_TOOL: ToolDefinition = {
+  name: "set_crisis_hotline_preference",
+  description:
+    "危機検知時（希死念慮・自傷を示唆する発言）に相談窓口（ホットライン）の案内を最優先するかどうかの、このユーザー本人の設定を切り替える。既定は有効（案内優先）。無効にすると、Botは番号の列挙より傾聴・相談を優先するようになる。ユーザー本人が「ホットラインの案内はいらない／オフにして」「窓口案内をオンにして」のように明示的に意思表示した場合にのみ呼び出すこと。会話の雰囲気や推測で勝手に呼び出してはならない。切り替えたら、その事実と、いつでも戻せることを必ず本人に伝えること。",
+  inputSchema: {
+    type: "object",
+    properties: {
+      enabled: {
+        type: "boolean",
+        description: "true=相談窓口案内を最優先（既定） / false=傾聴・相談を優先し、窓口案内を機械的に行わない",
+      },
+    },
+    required: ["enabled"],
+  },
+};
+
 export const ALL_TOOLS: ToolDefinition[] = [
   GET_RECENT_RECORDS_TOOL,
   SAVE_CHECKIN_TOOL,
@@ -148,4 +164,5 @@ export const ALL_TOOLS: ToolDefinition[] = [
   SAVE_THOUGHT_RECORD_TOOL,
   SAVE_GRATITUDE_TOOL,
   SAVE_ACTIVITY_TOOL,
+  SET_CRISIS_HOTLINE_PREFERENCE_TOOL,
 ];
