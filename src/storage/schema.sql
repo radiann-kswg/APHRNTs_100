@@ -137,3 +137,12 @@ CREATE TABLE IF NOT EXISTS mood_events (
   note TEXT,
   created_at TEXT NOT NULL
 );
+
+-- ユーザーごとのBot動作設定。
+-- crisis_hotline_enabled: 危機検知時に相談窓口（ホットライン）案内を最優先するか（1=案内優先・既定 / 0=傾聴・相談優先）。
+-- 行が無いユーザーは既定（1）として扱う。切り替えは本人の明示的な意思表示があった場合のみ行う（AGENTS.md 安全指針参照）。
+CREATE TABLE IF NOT EXISTS user_preferences (
+  user_id TEXT PRIMARY KEY,
+  crisis_hotline_enabled INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL
+);

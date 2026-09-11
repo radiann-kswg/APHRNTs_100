@@ -16,6 +16,7 @@ import { RateLimitStore } from "../storage/rate-limit-store.js";
 import { SafetyIncidentStore } from "../storage/safety-incident-store.js";
 import { SessionStore } from "../storage/session-store.js";
 import { ThoughtRecordStore } from "../storage/thought-record-store.js";
+import { UserPreferenceStore } from "../storage/user-preference-store.js";
 import { buildWeeklyTrend } from "../scheduler/weekly-summary-task.js";
 
 const DEV_CLI_USER_ID = "dev-cli-local-user";
@@ -33,6 +34,7 @@ async function main(): Promise<void> {
   const moodEventStore = new MoodEventStore(db);
   const rateLimitStore = new RateLimitStore(db);
   const safetyIncidentStore = new SafetyIncidentStore(db);
+  const userPreferenceStore = new UserPreferenceStore(db);
   const rateLimiter = new RateLimiter(
     rateLimitStore,
     env.RATE_LIMIT_REPLY_COOLDOWN_MS,
@@ -70,7 +72,16 @@ async function main(): Promise<void> {
     sessionStore,
     rateLimiter,
     safetyIncidentStore,
-    toolHandlerDeps: { checkinStore, thoughtRecordStore, gratitudeStore, activationStore, medicationStore, moodEventStore },
+    userPreferenceStore,
+    toolHandlerDeps: {
+      checkinStore,
+      thoughtRecordStore,
+      gratitudeStore,
+      activationStore,
+      medicationStore,
+      moodEventStore,
+      userPreferenceStore,
+    },
     now: () => new Date(),
   });
   if (bridge) {
