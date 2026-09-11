@@ -28,6 +28,7 @@ import { RateLimitStore } from "./storage/rate-limit-store.js";
 import { SafetyIncidentStore } from "./storage/safety-incident-store.js";
 import { SessionStore } from "./storage/session-store.js";
 import { ThoughtRecordStore } from "./storage/thought-record-store.js";
+import { UserPreferenceStore } from "./storage/user-preference-store.js";
 import { createHeartbeatWriter } from "./utils/heartbeat.js";
 import { createLogger } from "./utils/logger.js";
 import { notifyRecoveryIfLongDowntime, readPreviousHeartbeatTs } from "./utils/recovery-notice.js";
@@ -49,6 +50,7 @@ async function main(): Promise<void> {
   const moodEventStore = new MoodEventStore(db);
   const rateLimitStore = new RateLimitStore(db);
   const safetyIncidentStore = new SafetyIncidentStore(db);
+  const userPreferenceStore = new UserPreferenceStore(db);
   const botStateStore = new BotStateStore(db);
 
   const rateLimiter = new RateLimiter(
@@ -87,7 +89,16 @@ async function main(): Promise<void> {
     sessionStore,
     rateLimiter,
     safetyIncidentStore,
-    toolHandlerDeps: { checkinStore, thoughtRecordStore, gratitudeStore, activationStore, medicationStore, moodEventStore },
+    userPreferenceStore,
+    toolHandlerDeps: {
+      checkinStore,
+      thoughtRecordStore,
+      gratitudeStore,
+      activationStore,
+      medicationStore,
+      moodEventStore,
+      userPreferenceStore,
+    },
     now: () => new Date(),
     logger,
   });

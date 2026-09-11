@@ -4,6 +4,7 @@ import type { GratitudeStore } from "../../storage/gratitude-store.js";
 import type { MedicationRow, MedicationStore } from "../../storage/medication-store.js";
 import type { MoodEventStore } from "../../storage/mood-event-store.js";
 import type { ThoughtRecordStore } from "../../storage/thought-record-store.js";
+import type { UserPreferenceStore } from "../../storage/user-preference-store.js";
 import { shiftJstDateString, toJstDateString } from "../../utils/date.js";
 
 export interface ToolHandlerDeps {
@@ -13,6 +14,8 @@ export interface ToolHandlerDeps {
   activationStore: BehavioralActivationStore;
   medicationStore: MedicationStore;
   moodEventStore: MoodEventStore;
+  /** ユーザーごとの設定（相談窓口案内の有効/無効など）。省略時は設定変更ツールが「未対応」を返す */
+  userPreferenceStore?: UserPreferenceStore;
 }
 
 function numberOrUndefined(value: unknown): number | undefined {
@@ -205,6 +208,20 @@ export function createToolExecutor(
           now(),
         );
         return "活動の記録を保存したぞ。";
+      }
+
+      case "set_crisis_hotline_preference": {
+        const enabled = booleanOrUndefined(input.enabled);
+        if (enabled === undefined) {
+          return "有効にするか無効にするかが読み取れなかった。もう一度教えてくれ。";
+        }
+        if (!deps.userPreferenceStore) {
+          return "すまない、この環境では相談窓口案内の設定を保存できない。";
+        }
+        deps.userPreferenceStore.setCrisisHotlineEnabled(userId, enabled, now());
+        return enabled
+          ? "相談窓口（ホットライン）の案内を「有効」にしたぞ。つらい言葉が出たときは、まず窓口を案内する。いつでも「オフにして」で切り替えられる。"
+          : "相談窓口（ホットライン）の案内を「無効」にしたぞ。つらい言葉が出たときも番号を並べる前に、まずおれが話を聞くことを優先する。いつでも「オンにして」で戻せる。命に関わる緊急時だけは119番／110番を添えることがある。";
       }
 
       default:
