@@ -4,7 +4,11 @@ import type { SessionStore } from "../storage/session-store.js";
 import type { UserPreferenceStore } from "../storage/user-preference-store.js";
 import { buildCrisisListeningModePrompt } from "./character/safety-policy.js";
 import { RateLimiter } from "./ratelimit/index.js";
-import { buildCrisisResponse, checkForCrisis } from "./safety/crisis-detector.js";
+import {
+  buildCrisisListeningFallbackResponse,
+  buildCrisisResponse,
+  checkForCrisis,
+} from "./safety/crisis-detector.js";
 import { ALL_TOOLS } from "./tools/definitions.js";
 import { createToolExecutor, type ToolHandlerDeps } from "./tools/handlers.js";
 import { containsLeakedToolCallMarkup, salvageLeakedToolCalls } from "./tools/xml-call-salvage.js";
@@ -99,42 +103,65 @@ export function createMessagePipeline(deps: PipelineDeps): MessageHandler {
     const systemPrompt = listeningMode
       ? `${baseSystemPrompt}\n\n---\n\n${buildCrisisListeningModePrompt(crisisCheck.matchedTerms)}`
       : baseSystemPrompt;
-    const result = await deps.aiProvider.generateReply({
-      systemPrompt,
-      messages,
-      tools: ALL_TOOLS,
-      executeTool,
-    });
+    let replyText: string;
+    let toolInvocationCount = 0;
+    try {
+      const result = await deps.aiProvider.generateReply({
+        systemPrompt,
+        messages,
+        tools: ALL_TOOLS,
+        executeTool,
+      });
 
-    // 4. XML漏出ツール呼び出しの回収: LLMがツール呼び出しを正規のAPI形式ではなく
-    //    XMLテキストとして本文に書いてしまうことがある（実際に一対一チャットで生XMLが
-    //    そのまま投稿され、保存も実行されない不具合が起きた）。本文からパースして
-    //    本来どおり実行し、XMLは本文から除去する。
-    let replyText = result.text;
-    let toolInvocationCount = result.toolInvocations.length;
-    if (containsLeakedToolCallMarkup(replyText)) {
-      const salvage = salvageLeakedToolCalls(replyText, ALL_TOOLS);
-      deps.logger?.warn(
-        `応答本文にXML形式のツール呼び出しが漏出したため回収した（calls=${salvage.calls.length}, channel=${channel}）`,
-      );
-      for (const call of salvage.calls) {
-        await executeTool(call.name, call.input);
-        toolInvocationCount++;
+      // 4. XML漏出ツール呼び出しの回収: LLMがツール呼び出しを正規のAPI形式ではなく
+      //    XMLテキストとして本文に書いてしまうことがある（実際に一対一チャットで生XMLが
+      //    そのまま投稿され、保存も実行されない不具合が起きた）。本文からパースして
+      //    本来どおり実行し、XMLは本文から除去する。
+      replyText = result.text;
+      toolInvocationCount = result.toolInvocations.length;
+      if (containsLeakedToolCallMarkup(replyText)) {
+        const salvage = salvageLeakedToolCalls(replyText, ALL_TOOLS);
+        deps.logger?.warn(
+          `応答本文にXML形式のツール呼び出しが漏出したため回収した（calls=${salvage.calls.length}, channel=${channel}）`,
+        );
+        for (const call of salvage.calls) {
+          await executeTool(call.name, call.input);
+          toolInvocationCount++;
+        }
+        replyText = salvage.text;
       }
-      replyText = salvage.text;
+    } catch (error) {
+      // 5a. 危機応答（傾聴優先モード）の安全網: ここで例外を上へ投げると、呼び出し側は
+      //     エラーログを残してメッセージを未処理に戻すだけで、センパイには何も届かない
+      //     （replayで再試行されるまで「死にたい」に無言のまま）。危機時に無言は許されない
+      //     ため、LLMに依存しない定型の傾聴文で必ず応答する。
+      //     通常メッセージは従来どおり例外を伝播させ、呼び出し側のreplay再試行に委ねる。
+      if (!listeningMode) {
+        throw error;
+      }
+      deps.logger?.warn(
+        `傾聴優先モードの危機応答でAIProviderが失敗したため定型の傾聴文で応答する（channel=${channel}）`,
+        error,
+      );
+      replyText = buildCrisisListeningFallbackResponse();
     }
 
-    // 5. 空応答の安全網: AIProviderが空テキストを返すと、呼び出し側（chat/mentionハンドラ）は
-    //    送信をスキップし、メッセージは処理済み扱いになって再試行もされない（＝返信が永遠に
-    //    来ない）。ここで定型文にフォールバックし、無言の正常終了を根絶する。
+    // 5b. 空応答の安全網: AIProviderが空テキストを返すと、呼び出し側（chat/mentionハンドラ）は
+    //     送信をスキップし、メッセージは処理済み扱いになって再試行もされない（＝返信が永遠に
+    //     来ない）。ここで定型文にフォールバックし、無言の正常終了を根絶する。
+    //     傾聴優先モードの危機応答では、汎用の「もう一度話しかけてくれ」ではなく傾聴文を使う。
     if (replyText.length === 0) {
       deps.logger?.warn(
-        `AIProviderが空の応答を返したためフォールバック文を使う（channel=${channel}, toolInvocations=${toolInvocationCount}）`,
+        `AIProviderが空の応答を返したためフォールバック文を使う（channel=${channel}, listeningMode=${listeningMode}, toolInvocations=${toolInvocationCount}）`,
       );
-      replyText =
-        toolInvocationCount > 0
-          ? "記録は済ませたぞ、センパイ。……すまない、返事の文章がうまく出てこなかった。内容は確かに受け取ってるから、安心してくれ。"
-          : "すまない、センパイ。返事の生成にしくじったみたいだ。もう一度話しかけてくれると助かる。";
+      if (listeningMode) {
+        replyText = buildCrisisListeningFallbackResponse();
+      } else {
+        replyText =
+          toolInvocationCount > 0
+            ? "記録は済ませたぞ、センパイ。……すまない、返事の文章がうまく出てこなかった。内容は確かに受け取ってるから、安心してくれ。"
+            : "すまない、センパイ。返事の生成にしくじったみたいだ。もう一度話しかけてくれると助かる。";
+      }
     }
 
     deps.sessionStore.appendExchange(userId, text, replyText, now);
