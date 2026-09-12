@@ -26,14 +26,23 @@ function readScore(text, re, min, max) {
 
 // src/bridge/checkin-importer.ts と同じ正規表現
 const MOOD_RE = /気分\s*:\s*(\d{1,2})\s*\/\s*10/;
-const ENERGY_RE = /(?:エネルギー|活力)\s*:?\s*(\d{1,2})\s*\/\s*10/;
+// 「エネルギー: 7/10」「エネルギーは7/10」「活力も8/10」いずれも拾う
+const ENERGY_RE = /(?:エネルギー|活力)[^0-9\n]{0,8}?(\d{1,2})\s*\/\s*10/;
 // 実ログには「眠りの質 4（5段階）」と「眠りの質: 2/5」の両表記があるため、コロンも許容する
 const SLEEP_QUALITY_RE = /眠りの質\s*:?\s*(\d)/;
 // 起床時刻: 6:00 / 起床時刻: 06:30（正規化後なので半角コロン）
 const WAKE_TIME_RE = /起床時刻\s*:?\s*(\d{1,2}:\d{2})/;
 
 // src/bridge/medication-importer.ts と同じセクション・ラベル定義
-const MEDICATION_SECTION_RE = /##\s*服薬\s*\n([\s\S]*?)(?=\n##\s|$)/;
+// 「## 服薬」だけでなく「## 服薬記録」「## 服薬（1日を通して）」等の接尾辞つき見出しも拾う。
+// 1日の中に朝／夜など複数の服薬セクションが立つ日があるため、全セクションを連結して扱う。
+const MEDICATION_SECTION_RE = /##\s*服薬[^\n]*\n([\s\S]*?)(?=\n##\s|$)/g;
+
+/** その日のすべての服薬セクション本文を連結して返す（1つも無ければ undefined） */
+function medicationSections(markdown) {
+  const bodies = [...markdown.matchAll(MEDICATION_SECTION_RE)].map((m) => m[1]);
+  return bodies.length > 0 ? bodies.join('\n') : undefined;
+}
 const MED_SLOTS = [
   ['morning', '朝🌄'],
   ['midday', '日中☀️'],
@@ -72,15 +81,17 @@ export function parseDailyLogForWeekly(markdown) {
     hasCreative: hasContent(sectionBody(markdown, /創作活動の進捗/)),
   };
 
-  const medSection = markdown.match(MEDICATION_SECTION_RE)?.[1];
+  const medSection = medicationSections(markdown);
   if (medSection !== undefined) {
     for (const [key, label] of MED_SLOTS) {
       // [x]=服用済み・[ ]=未服用・記載なし=未報告（undefined）
       if (new RegExp(`${label}\\s*[:：]?\\s*\\[[xX]\\]`).test(medSection)) parsed.meds[key] = true;
       else if (new RegExp(`${label}\\s*[:：]?\\s*\\[ \\]`).test(medSection)) parsed.meds[key] = false;
     }
-    const prn = medSection.match(/発作時⚡\s*[:：]?\s*(?:→\s*)?.*?(\d+)\s*回/);
-    if (prn) parsed.prnCount = Number.parseInt(prn[1], 10);
+    const prnMatches = [...medSection.matchAll(/発作時⚡\s*[:：]?\s*(?:→\s*)?.*?(\d+)\s*回/g)];
+    if (prnMatches.length > 0) {
+      parsed.prnCount = prnMatches.reduce((sum, m) => sum + Number.parseInt(m[1], 10), 0);
+    }
   }
   return parsed;
 }
