@@ -140,9 +140,33 @@ CREATE TABLE IF NOT EXISTS mood_events (
 
 -- ユーザーごとのBot動作設定。
 -- crisis_hotline_enabled: 危機検知時に相談窓口（ホットライン）案内を最優先するか（1=案内優先・既定 / 0=傾聴・相談優先）。
--- 行が無いユーザーは既定（1）として扱う。切り替えは本人の明示的な意思表示があった場合のみ行う（AGENTS.md 安全指針参照）。
+-- post_analysis_enabled: Misskeyの本人投稿からの傾向集計を行うか（0=しない・既定 / 1=する）。
+-- 行が無いユーザーは既定（crisis_hotline_enabled=1 / post_analysis_enabled=0）として扱う。
+-- 切り替えは本人の明示的な意思表示があった場合のみ行う（AGENTS.md 安全指針参照）。
 CREATE TABLE IF NOT EXISTS user_preferences (
   user_id TEXT PRIMARY KEY,
   crisis_hotline_enabled INTEGER NOT NULL DEFAULT 1,
+  post_analysis_enabled INTEGER NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL
+);
+
+-- Misskeyの本人投稿から数えた日次の行動指標（オプトイン・既定OFF）。
+-- **投稿本文は保存しない**（数えた結果だけを持つ）。第三者の投稿は取得段階で1件も入らない
+-- （users/notes に userId を固定し、HTLは購読しない）。設計は docs/misskey-post-mood-trend.md を参照。
+CREATE TABLE IF NOT EXISTS misskey_post_metrics (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL,
+  date TEXT NOT NULL,                    -- JSTのYYYY-MM-DD
+  post_count INTEGER NOT NULL,
+  reply_count INTEGER NOT NULL,
+  night_post_count INTEGER NOT NULL,     -- JST 00:00〜04:59 の投稿数
+  first_post_at TEXT,                    -- ISO 8601
+  last_post_at TEXT,
+  total_chars INTEGER NOT NULL,          -- 正規化後（メンション・URL・絵文字記法を除去）の合計文字数
+  cw_count INTEGER NOT NULL,
+  attachment_post_count INTEGER NOT NULL,
+  max_burst_per_hour INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(user_id, date)
 );

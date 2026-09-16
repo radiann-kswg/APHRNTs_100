@@ -1,7 +1,8 @@
-# Misskey投稿からの気分傾向 俯瞰機能 — 要件定義と実装計画（ドラフト）
+# Misskey投稿からの気分傾向 俯瞰機能 — 要件定義と実装計画
 
-> Misskey Botの将来機能案。センパイが普段Misskeyに書いている投稿（ノート）から、気分・生活リズムの**傾向**を俯瞰できるようにする。
-> 本ドキュメントは**実装前の要件定義と段階的な実装計画**であり、現時点では `src/` に一行も実装していない。着手の可否・範囲はセンパイの判断を仰ぐ（[センパイに決めてほしいこと](#センパイに決めてほしいこと未決事項)）。
+> Misskey Botの機能。センパイが普段Misskeyに書いている投稿（ノート）から、気分・生活リズムの**傾向**を俯瞰できるようにする。
+>
+> **実装状況（2026-09-16時点）**: **Phase 1（収集と集計・段階A）と Phase 2（オンデマンド取得）を実装済み**。Phase 3（定期提示）・Phase 4（段階Bの語彙シグナル）・Phase 5（段階CのLLM要約）は未着手で、着手にはセンパイの判断が要る（[未決事項](#センパイに決めてほしいこと未決事項) 2〜5・7）。実装の入口は[`src/scheduler/post-analysis-task.ts`](../src/scheduler/post-analysis-task.ts)と[`src/analysis/`](../src/analysis/)。運用方針は[AGENTS.md](../AGENTS.md#生活管理cbtサポートの運用方針)にも反映済み。
 
 共通仕様の正典は [AGENTS.md](../AGENTS.md)、安全指針は[生活管理・CBTサポートの運用方針](../AGENTS.md#生活管理cbtサポートの運用方針)を正とする。本ドキュメントはその制約下で成立する範囲だけを定義する。
 
@@ -79,6 +80,16 @@
 | P5 | **公開チャネルに出さない** | 分析結果の提示先は一対一チャットと `logs/` のみ。公開ノート・リプライで内容に触れない（既存の週次サマリと同じ扱い） |
 | P6 | **監視にしない** | 投稿を根拠にBotから自発的に踏み込まない。危機対応は既存の[危機検知](../src/bot/safety/crisis-detector.ts)の専管領域のまま動かさない |
 | P7 | **「学習」しない** | 取得した投稿をモデル学習・ファインチューニング・外部データセットに使わない |
+
+実装での担保（Phase 1・2時点）:
+
+| 原則 | どのテストが壊れたら気づけるか |
+| --- | --- |
+| P1 | `post-metrics.test.ts`（他ユーザーのノートを混ぜても集計に入らない）、`post-analysis-task.test.ts`（取得口が `fetchUserNotes` のみ） |
+| P2 | `post-analysis-task.test.ts`（OFFのとき `fetchUserNotes` が1度も呼ばれない）、`post-trend-tool.test.ts`（OFFへの切り替えで指標とカーソルが消える） |
+| P3 | `post-analysis-task.test.ts`（実行後にDBの全テーブルを走査し、本文・CWの文字列が1つも出ないことを確認） |
+| P4 | `post-trend.test.ts`（出力に「診断」「症状」等の語が含まれない・合成スコアを作らない） |
+| P6 | `post-trend-tool.test.ts`（ツール説明文の「聞かれたときだけ」「話題を切り出してはならない」が消えていない） |
 
 P6について補足する。公開投稿を機械が読んで、本人が求めていないタイミングで「その投稿、気になったんだが」と声をかけるのは、**支援ではなく監視**として体験されうる。ここは機能の有用性より体験の安全を優先し、v1では投稿起点の自発的な介入を一切行わない（段階的な緩和案は[出力とUXの要件](#出力とuxの要件)に記す）。
 
@@ -245,6 +256,8 @@ v1では行わない。将来検討するとしても、次の条件を全部満
 
 `schema.sql` は `CREATE TABLE IF NOT EXISTS` で冪等に適用される（既存の運用どおり、マイグレーションスクリプトは不要）。
 
+実際に作られたのは `misskey_post_metrics` だけである（`lexicon_json` / `excluded_post_count` は段階Bの、`post_trend_summaries` は段階Cの器なので、着手時に足す）。現行のスキーマは[`src/storage/schema.sql`](../src/storage/schema.sql)を正とする。
+
 ```sql
 -- 投稿由来の日次指標。**本文は保存しない**（数えた結果だけを持つ）。
 CREATE TABLE IF NOT EXISTS misskey_post_metrics (
@@ -280,24 +293,29 @@ CREATE TABLE IF NOT EXISTS post_trend_summaries (
 );
 ```
 
-- `user_preferences` に `post_analysis_enabled INTEGER NOT NULL DEFAULT 0` を追加（既定OFF＝P2）。既存の `crisis_hotline_enabled` と同じ扱いで、切り替えは本人の明示的な意思表示があったときのみ。
-- カーソルは `bot_state` の `post_analysis_last_note_id:<userId>`。
-- **保持期間**: 指標180日／要約365日（設定可）。超過分は日次タスクの冒頭で削除する。
-- **停止時の削除**: `post_analysis_enabled` を0にしたら、そのユーザーの `misskey_post_metrics` / `post_trend_summaries` / カーソルを**その場で削除**する。「止めたのにデータは残っている」状態を作らない。
-- 日付指定の部分削除（「あの日の分は消して」）を Phase 2 でCLIとして用意する。
+- `user_preferences` に `post_analysis_enabled INTEGER NOT NULL DEFAULT 0` を追加（既定OFF＝P2）。既存の `crisis_hotline_enabled` と同じ扱いで、切り替えは本人の明示的な意思表示があったときのみ。**既存DBには列が増えないため**、[`src/storage/db.ts`](../src/storage/db.ts)の `addMissingColumns()` が起動時に `ALTER TABLE` で補う（稼働中の本番DBを作り直さないための最小マイグレーション。回帰テストあり）。
+- カーソルは `bot_state` の `post_analysis_last_note_id:<userId>`（キーの組み立ては `postAnalysisCursorKey()`）。集計対象外のノートも含めた最大IDまで進める（除外分を戻すと毎回同じものを取り直し続けるため）。
+- **保持期間**: 指標180日（`POST_ANALYSIS_METRIC_RETENTION_DAYS`）。超過分は日次タスクの冒頭で削除する。要約365日は段階C着手時に足す。
+- **停止時の削除**: `post_analysis_enabled` を0にしたら、そのユーザーの `misskey_post_metrics` とカーソルを**その場で削除**する（`set_post_analysis_preference` ツール内で実施）。「止めたのにデータは残っている」状態を作らない。
+- 日付指定の部分削除（「あの日の分は消して」）は未実装。全消しはツールから即できるため、必要になってから足す。
 
-### 実装ファイルの配置案
+### 実装ファイルの配置（Phase 1・2の実装結果）
 
-| ファイル | 役割 | 純関数か |
-| --- | --- | --- |
-| `src/misskey/client.ts` | `fetchUserNotes()` を追加（`users/notes` のページング） | — |
-| `src/analysis/post-normalizer.ts` | メンション・URL・絵文字記法の除去、創作文脈の判定 | ○ |
-| `src/analysis/post-metrics.ts` | ノート配列 → 日次指標（段階A） | ○ |
-| `src/analysis/lexicon.ts` | 辞書と語彙カウント（段階B） | ○ |
-| `src/analysis/post-trend.ts` | 日次指標 → 期間集計・平常時との差 | ○ |
-| `src/storage/post-metric-store.ts` / `post-summary-store.ts` | 永続化 | — |
-| `src/scheduler/post-analysis-task.ts` | 日次バッチ（取得→集計→保存→保持期間の掃除） | — |
-| `src/bot/tools/definitions.ts` / `handlers.ts` | `get_post_trend` / `set_post_analysis_preference` | — |
+| ファイル | 役割 | 純関数か | 状態 |
+| --- | --- | --- | --- |
+| [`src/misskey/client.ts`](../src/misskey/client.ts) | `fetchUserNotes()`（`users/notes` のページング・カーソル前進） | — | 実装済み |
+| [`src/analysis/post-metrics.ts`](../src/analysis/post-metrics.ts) | 正規化（メンション・URL・絵文字記法の除去）＋除外判定＋日次指標（段階A） | ○ | 実装済み |
+| [`src/analysis/post-trend.ts`](../src/analysis/post-trend.ts) | 日次指標 → 期間集計・平常時との差・提示文面 | ○ | 実装済み |
+| [`src/storage/post-metric-store.ts`](../src/storage/post-metric-store.ts) | 永続化（同じ日への書き込みは加算マージ）・保持期間の削除・停止時の全削除 | — | 実装済み |
+| [`src/scheduler/post-analysis-task.ts`](../src/scheduler/post-analysis-task.ts) | 日次バッチ（オプトイン確認→取得→集計→保存→掃除） | — | 実装済み |
+| [`src/bot/tools/definitions.ts`](../src/bot/tools/definitions.ts) / [`handlers.ts`](../src/bot/tools/handlers.ts) | `get_post_trend` / `set_post_analysis_preference` | — | 実装済み |
+| `src/analysis/lexicon.ts` | 辞書と語彙カウント（段階B） | ○ | 未着手（Phase 4） |
+| `src/storage/post-summary-store.ts` | 段階Cの要約の永続化 | — | 未着手（Phase 5） |
+
+計画時の案からの差分（意図的な単純化）:
+
+- `post-normalizer.ts` は独立させず `post-metrics.ts` に同居させた。正規化は数十行で、利用者も日次集計だけであるため、ファイルを分ける理由が無かった。創作文脈の判定は段階B（Phase 4）まで不要なので入れていない。
+- カーソル方式のため1回の取得には「前回の続き」しか来ない。したがって日次指標の書き込みは**上書きではなく加算マージ**にしてある（同じ日に複数回走っても二重にならず、日中に増えた投稿はあとから足される）。
 
 既存の設計どおり、**判断ロジックは純関数に寄せて vitest で直接テストする**（`detectTrend` と同じ作法）。
 
@@ -305,15 +323,19 @@ CREATE TABLE IF NOT EXISTS post_trend_summaries (
 
 ## 設定（`.env`）案
 
-| 変数 | 既定 | 意味 |
-| --- | --- | --- |
-| `POST_ANALYSIS_ENABLED` | `false` | 機能全体のスイッチ。`BOT_OWNER_USER_ID` が空なら `true` でも動かさない |
-| `POST_ANALYSIS_HOUR` | `5` | 日次バッチの実行時刻（JST） |
-| `POST_ANALYSIS_MAX_NOTES_PER_RUN` | `500` | 1回の実行で取得する上限 |
-| `POST_ANALYSIS_VISIBILITIES` | `public,home` | 集計対象の可視性 |
-| `POST_ANALYSIS_EXCLUDE_TAGS` | （空） | 創作文脈として語彙集計から外すハッシュタグ |
-| `POST_ANALYSIS_METRIC_RETENTION_DAYS` | `180` | 指標の保持日数 |
-| `POST_ANALYSIS_LLM_SUMMARY_ENABLED` | `false` | 段階C（LLM要約）の有効化 |
+| 変数 | 既定 | 意味 | 状態 |
+| --- | --- | --- | --- |
+| `POST_ANALYSIS_ENABLED` | `false` | 機能全体のスイッチ。`BOT_OWNER_USER_ID` が空なら `true` でも動かさない | 実装済み |
+| `POST_ANALYSIS_HOUR` | `5` | 日次バッチの実行時刻（JST） | 実装済み |
+| `POST_ANALYSIS_MAX_NOTES_PER_RUN` | `500` | 1回の実行で取得する上限 | 実装済み |
+| `POST_ANALYSIS_VISIBILITIES` | `public,home` | 集計対象の可視性 | 実装済み |
+| `POST_ANALYSIS_METRIC_RETENTION_DAYS` | `180` | 指標の保持日数 | 実装済み |
+| `POST_ANALYSIS_EXCLUDE_TAGS` | （空） | 創作文脈として語彙集計から外すハッシュタグ | 未実装（Phase 4） |
+| `POST_ANALYSIS_LLM_SUMMARY_ENABLED` | `false` | 段階C（LLM要約）の有効化 | 未実装（Phase 5） |
+
+**環境変数（`POST_ANALYSIS_ENABLED`）と本人のオプトイン（`user_preferences.post_analysis_enabled`）は別物**で、両方が揃わないと1件も取得しない。前者は運用者が機能を積むかどうか、後者はセンパイが自分の投稿を数えさせるかどうかを決める。
+
+また、ツール（`get_post_trend` / `set_post_analysis_preference`）は `BOT_OWNER_USER_ID` 本人にしか反応しない。日次バッチが集めるのはオーナーのぶんだけなので、他ユーザーに「有効にした」と答えて何も溜まらない状態を作らないためである。環境変数がOFFのときも同じく「扱えない」と答える。
 
 `.env.example` には、既存の項目と同じく**何を送るのか・何を保存しないのか**をコメントで明記する。
 
@@ -323,16 +345,16 @@ CREATE TABLE IF NOT EXISTS post_trend_summaries (
 
 各フェーズは単独でマージ可能・単独で価値があり、途中で止めても壊れないことを条件にする。規模は目安。
 
-| Phase | 内容 | 成果物 | 受け入れ条件 | 目安 |
+| Phase | 内容 | 成果物 | 受け入れ条件 | 状態 |
 | --- | --- | --- | --- | --- |
-| **0. 合意** | 本ドキュメントのレビュー、未決事項の決定、辞書の語彙レビュー、`users/notes` の実機確認（可視性ごとに何が見えるか） | 本ドキュメントの確定版、AGENTS.mdへ追記する方針文の下書き | センパイが未決事項1〜7に回答済み | 会話のみ |
-| **1. 収集と集計（段階A）** | オプトイン設定、`fetchUserNotes`、正規化、日次指標、日次バッチ、保持期間の掃除 | `src/analysis/`（段階A）、`src/storage/post-metric-store.ts`、`src/scheduler/post-analysis-task.ts` | `npm test` 全件パス。OFFのとき1件も取得しない／ON→OFFで全削除されることをテストで担保。本文がDB・ログに残らないことをテストで担保 | 実装 ~450行 / テスト ~500行 |
-| **2. 可視化（オンデマンド）** | `get_post_trend` ツール、期間集計、日付指定削除CLI | `src/analysis/post-trend.ts`、ツール2種 | 聞かれたときだけ答える。聞かれていないのに言及しないことを結合テストで担保 | 実装 ~250行 / テスト ~300行 |
-| **3. 定期提示** | 週次サマリへの1セクション追加、`bot-digest.md` への「## 投稿の傾向」 | `weekly-summary-task.ts` / `digest-exporter.ts` の差分 | 文面に診断語・評価語が入らないことをテストで担保（既存の安全文言テストと同じ手法） | 実装 ~150行 / テスト ~200行 |
-| **4. 重ね合わせ（段階B完成）** | 語彙シグナルの本採用、Artifactへの重ね合わせ、`mood-artifact.md` 更新 | 辞書、`.cbt-datas/mood-artifact.md` の追記 | 創作文脈の除外がテストで担保されている | 実装 ~200行 / テスト ~250行 |
-| **5. 要約（段階C・任意）** | LLM要約。**センパイが3で承諾した場合のみ着手** | `post_trend_summaries`、要約プロンプト | 既定OFF。本文が保存されないことをテストで担保 | 実装 ~200行 / テスト ~200行 |
+| **0. 合意** | 本ドキュメントのレビュー、未決事項の決定、辞書の語彙レビュー、`users/notes` の実機確認（可視性ごとに何が見えるか） | 本ドキュメントの確定版、AGENTS.mdへ追記する方針文の下書き | センパイが未決事項1〜7に回答済み | **一部**（既定値で進められる1・6は既定のまま採用。実機確認は未実施） |
+| **1. 収集と集計（段階A）** | オプトイン設定、`fetchUserNotes`、正規化、日次指標、日次バッチ、保持期間の掃除 | `src/analysis/`（段階A）、`src/storage/post-metric-store.ts`、`src/scheduler/post-analysis-task.ts` | `npm test` 全件パス。OFFのとき1件も取得しない／ON→OFFで全削除されることをテストで担保。本文がDB・ログに残らないことをテストで担保 | **完了** |
+| **2. 可視化（オンデマンド）** | `get_post_trend` ツール、期間集計、日付指定削除CLI | `src/analysis/post-trend.ts`、ツール2種 | 聞かれたときだけ答える。聞かれていないのに言及しないことを結合テストで担保 | **完了**（日付指定削除CLIは見送り。ツールの説明文に「聞かれたときだけ」を明記し、その文言が消えないことをテストで固定） |
+| **3. 定期提示** | 週次サマリへの1セクション追加、`bot-digest.md` への「## 投稿の傾向」 | `weekly-summary-task.ts` / `digest-exporter.ts` の差分 | 文面に診断語・評価語が入らないことをテストで担保（既存の安全文言テストと同じ手法） | 未着手（未決事項4の回答待ち） |
+| **4. 重ね合わせ（段階B完成）** | 語彙シグナルの本採用、Artifactへの重ね合わせ、`mood-artifact.md` 更新 | 辞書、`.cbt-datas/mood-artifact.md` の追記 | 創作文脈の除外がテストで担保されている | 未着手（未決事項2の回答＋辞書レビュー待ち） |
+| **5. 要約（段階C・任意）** | LLM要約。**センパイが3で承諾した場合のみ着手** | `post_trend_summaries`、要約プロンプト | 既定OFF。本文が保存されないことをテストで担保 | 未着手（未決事項3の回答待ち） |
 
-Phase 1 に着手する時点で、AGENTS.md の[生活管理・CBTサポートの運用方針](../AGENTS.md#生活管理cbtサポートの運用方針)に**本機能の位置づけ（オプトイン・非診断・監視にしない・危機検知とは別物）を追記**する。仕様がコードだけにある状態を作らない。同時に更新するのは `README.md`・`.env.example`・`logs/README.md`（`bot-digest.md` の節）・`.cbt-datas/mood-artifact.md`。
+Phase 1・2 の実装に合わせて、AGENTS.md の[生活管理・CBTサポートの運用方針](../AGENTS.md#生活管理cbtサポートの運用方針)に**本機能の位置づけ（オプトイン・非診断・監視にしない・危機検知とは別物）を追記済み**。`README.md`（「投稿からの傾向集計」節）と `.env.example` も更新済み。`logs/README.md`・`.cbt-datas/mood-artifact.md` は Phase 3・4 で `bot-digest.md` とArtifactに載せるときに更新する（現時点では投稿由来のデータが `logs/` に一切書き込まれないため、触っていない）。
 
 ---
 
@@ -369,13 +391,22 @@ Phase 1 に着手する時点で、AGENTS.md の[生活管理・CBTサポート�
 
 ## センパイに決めてほしいこと（未決事項）
 
+Phase 1・2 は、**回答が無くても安全側の既定で成立する範囲**だけを実装してある。現在の扱いを各項目に付記する。
+
 1. **フォロワー限定投稿を集計対象に含めるか**（含めるならBotアカウントがセンパイをフォローしている必要がある。既定は `public` / `home` のみ）
+   → 現状: 既定のまま `public,home`。含めたくなったら `.env` の `POST_ANALYSIS_VISIBILITIES` に `followers` を足すだけでよい（コード変更は不要）。
 2. **創作アカウント・創作投稿の切り分け方**（同一アカウントでキャラの台詞も投稿しているか。除外に使えるハッシュタグはあるか）
+   → 現状: 段階B（語彙シグナル）を実装していないため影響なし。**Phase 4 の着手条件**であり、回答と辞書レビューが揃うまで着手しない。
 3. **段階C（LLM要約）を許容するか**（投稿本文が外部APIへ渡る唯一の経路。既定OFFで、Phase 5 を着手しない選択もある）
+   → 現状: 未実装。投稿本文が外部APIへ渡る経路は**1本も無い**。
 4. **分析結果をどこまで見たいか**（聞いたときだけ／週次サマリにも載せる／`bot-digest.md` にも出す）
+   → 現状: **聞いたときだけ**（`get_post_trend`）。週次サマリ・`bot-digest.md` には一切出していない。
 5. **傾向ナッジ（既存の声かけ）に投稿由来の指標を反映させるか**（現行は気分低下＋服薬ギャップの両立でのみ発火。ここに触れるかどうか）
+   → 現状: **触っていない**。`trend-nudge-task.ts` の発火条件は変更していない。
 6. **保持期間**（指標180日・要約365日の既定でよいか）
+   → 現状: 指標180日の既定のまま（`.env` で変更可）。
 7. **どこから着手するか**（Phase 1 だけ先に作って数週間ぶん溜めてから見え方を決める、という進め方も可能）
+   → 現状: Phase 1・2 のみ実装。数値を数週間ためてから、4・5（見せ方・声かけ）を決める進め方ができる状態になっている。
 
 ---
 

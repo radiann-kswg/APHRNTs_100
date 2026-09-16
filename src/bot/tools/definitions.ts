@@ -156,6 +156,34 @@ export const SET_CRISIS_HOTLINE_PREFERENCE_TOOL: ToolDefinition = {
   },
 };
 
+export const GET_POST_TREND_TOOL: ToolDefinition = {
+  name: "get_post_trend",
+  description:
+    "センパイ本人のMisskey投稿を数えた、直近N日（既定7日・最大30日）の「投稿の様子」（投稿数・深夜帯の投稿数・投稿のあった日数・1投稿あたりの文字数など）を返す読み取り専用ツール。返るのは数値と平常時との差だけで、評価も判定も含まない。センパイから「最近の投稿の様子は？」「投稿の傾向を見せてくれ」等と**聞かれたときだけ**呼び出すこと。聞かれていないのにこのツールを呼んで投稿の話題を切り出してはならない（見張られている感覚にしないため）。結果を伝えるときも、Bot側で調子の良し悪しを決めつけず、センパイ自身の実感と突き合わせる材料として渡すこと。この機能は既定オフで、本人がオンにしていなければその旨が返る。",
+  inputSchema: {
+    type: "object",
+    properties: {
+      days: { type: "integer", minimum: 1, maximum: 30, description: "遡る日数（今日を含む）。省略時は7。" },
+    },
+  },
+};
+
+export const SET_POST_ANALYSIS_PREFERENCE_TOOL: ToolDefinition = {
+  name: "set_post_analysis_preference",
+  description:
+    "Misskeyの本人投稿からの傾向集計（get_post_trendで見られる数値）のオン/オフを切り替える。既定はオフ。オンにすると1日1回、センパイ本人の投稿だけを数えて日次の指標を保存する（投稿本文は保存しない。他ユーザーの投稿は取得しない）。オフにすると、それまでに溜めた集計と取得位置をその場で全部削除する（元に戻せない）。ユーザー本人が「投稿の傾向を見られるようにして」「投稿の集計はオフにして」のように明示的に意思表示した場合にのみ呼び出すこと。推測で勝手に呼び出してはならない。切り替えたら、その事実と、いつでも戻せる／オフにすればデータが消えることを必ず本人に伝えること。",
+  inputSchema: {
+    type: "object",
+    properties: {
+      enabled: {
+        type: "boolean",
+        description: "true=投稿からの集計を有効にする / false=無効にし、蓄積済みの集計を削除する（既定）",
+      },
+    },
+    required: ["enabled"],
+  },
+};
+
 export const ALL_TOOLS: ToolDefinition[] = [
   GET_RECENT_RECORDS_TOOL,
   SAVE_CHECKIN_TOOL,
@@ -165,4 +193,6 @@ export const ALL_TOOLS: ToolDefinition[] = [
   SAVE_GRATITUDE_TOOL,
   SAVE_ACTIVITY_TOOL,
   SET_CRISIS_HOTLINE_PREFERENCE_TOOL,
+  GET_POST_TREND_TOOL,
+  SET_POST_ANALYSIS_PREFERENCE_TOOL,
 ];

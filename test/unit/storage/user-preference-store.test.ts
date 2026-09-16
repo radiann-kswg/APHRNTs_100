@@ -12,9 +12,25 @@ describe("UserPreferenceStore", () => {
     store = new UserPreferenceStore(db);
   });
 
-  it("defaults to hotline guidance enabled for unknown users", () => {
-    expect(store.get("nobody")).toEqual({ crisisHotlineEnabled: true });
+  it("defaults to hotline guidance enabled and post analysis disabled for unknown users", () => {
+    expect(store.get("nobody")).toEqual({ crisisHotlineEnabled: true, postAnalysisEnabled: false });
     expect(store.isCrisisHotlineEnabled("nobody")).toBe(true);
+    expect(store.isPostAnalysisEnabled("nobody")).toBe(false);
+  });
+
+  it("opts a user in and out of post analysis without touching the hotline setting", () => {
+    store.setCrisisHotlineEnabled("u1", false);
+    store.setPostAnalysisEnabled("u1", true);
+    expect(store.get("u1")).toEqual({ crisisHotlineEnabled: false, postAnalysisEnabled: true });
+    expect(store.isPostAnalysisEnabled("u2")).toBe(false);
+
+    store.setPostAnalysisEnabled("u1", false);
+    expect(store.get("u1")).toEqual({ crisisHotlineEnabled: false, postAnalysisEnabled: false });
+  });
+
+  it("keeps the hotline default when post analysis is the first setting a user touches", () => {
+    store.setPostAnalysisEnabled("fresh", true);
+    expect(store.get("fresh")).toEqual({ crisisHotlineEnabled: true, postAnalysisEnabled: true });
   });
 
   it("disables and re-enables hotline guidance per user", () => {
