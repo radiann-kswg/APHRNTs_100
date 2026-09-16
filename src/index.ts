@@ -15,6 +15,7 @@ import {
   createWeeklySummaryTask,
 } from "./scheduler/index.js";
 import { createMedicationReminderTask } from "./scheduler/med-reminder-task.js";
+import { createPostAnalysisTask } from "./scheduler/post-analysis-task.js";
 import { TaskScheduler } from "./scheduler/task-scheduler.js";
 import { createTrendNudgeTask } from "./scheduler/trend-nudge-task.js";
 import { BehavioralActivationStore } from "./storage/behavioral-activation-store.js";
@@ -24,6 +25,7 @@ import { openDatabase } from "./storage/db.js";
 import { GratitudeStore } from "./storage/gratitude-store.js";
 import { MedicationStore } from "./storage/medication-store.js";
 import { MoodEventStore } from "./storage/mood-event-store.js";
+import { PostMetricStore } from "./storage/post-metric-store.js";
 import { RateLimitStore } from "./storage/rate-limit-store.js";
 import { SafetyIncidentStore } from "./storage/safety-incident-store.js";
 import { SessionStore } from "./storage/session-store.js";
@@ -48,6 +50,7 @@ async function main(): Promise<void> {
   const activationStore = new BehavioralActivationStore(db);
   const medicationStore = new MedicationStore(db);
   const moodEventStore = new MoodEventStore(db);
+  const postMetricStore = new PostMetricStore(db);
   const rateLimitStore = new RateLimitStore(db);
   const safetyIncidentStore = new SafetyIncidentStore(db);
   const userPreferenceStore = new UserPreferenceStore(db);
@@ -98,6 +101,11 @@ async function main(): Promise<void> {
       medicationStore,
       moodEventStore,
       userPreferenceStore,
+      // 運用側のスイッチがOFF（またはオーナー未設定）なら、ツールからも触らせない。
+      // 「オンにしたのに何も溜まらない」状態をセンパイに作らないため。
+      ...(env.POST_ANALYSIS_ENABLED && env.BOT_OWNER_USER_ID
+        ? { postMetricStore, botStateStore, postAnalysisOwnerUserId: env.BOT_OWNER_USER_ID }
+        : {}),
     },
     now: () => new Date(),
     logger,
@@ -289,6 +297,24 @@ async function main(): Promise<void> {
       hour: env.MED_REMINDER_HOUR,
       ownerUserId: env.BOT_OWNER_USER_ID || undefined,
     }),
+    // Misskeyの本人投稿からの傾向集計。機能スイッチがOFF、またはオーナーIDが未設定なら登録しない。
+    // 登録されても、本人がオプトインするまでタスクはMisskeyへ1件も取りに行かない（既定OFF）。
+    ...(env.POST_ANALYSIS_ENABLED && env.BOT_OWNER_USER_ID
+      ? [
+          createPostAnalysisTask({
+            botStateStore,
+            preferenceStore: userPreferenceStore,
+            postMetricStore,
+            noteSource: misskeyClient,
+            ownerUserId: env.BOT_OWNER_USER_ID,
+            hour: env.POST_ANALYSIS_HOUR,
+            maxNotesPerRun: env.POST_ANALYSIS_MAX_NOTES_PER_RUN,
+            visibilities: env.POST_ANALYSIS_VISIBILITIES,
+            retentionDays: env.POST_ANALYSIS_METRIC_RETENTION_DAYS,
+            logger,
+          }),
+        ]
+      : []),
   ]);
   scheduler.start();
 

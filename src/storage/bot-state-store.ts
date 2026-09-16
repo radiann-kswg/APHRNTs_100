@@ -18,4 +18,9 @@ export class BotStateStore {
       )
       .run(key, value, now.toISOString());
   }
+
+  /** キーを消す（機能停止時にカーソル等を残さないため）。存在しなければ何もしない。 */
+  delete(key: string): void {
+    this.db.prepare("DELETE FROM bot_state WHERE key = ?").run(key);
+  }
 }

@@ -1,4 +1,5 @@
 import * as Misskey from "misskey-js";
+import type { UserNote } from "../analysis/post-metrics.js";
 import {
   computeBackoffDelay,
   isShortLivedConnection,
@@ -406,6 +407,52 @@ export class MisskeyClient {
         text: message.text ?? "",
         createdAt: message.createdAt,
       }));
+  }
+
+  /**
+   * 指定ユーザー**本人の投稿だけ**をREST API（users/notes）で取得する（投稿傾向の集計用）。
+   *
+   * ホームタイムライン（notes/timeline・streamの homeTimeline）は使わない。HTLを読むと
+   * 第三者の投稿が不可避で混入するが、users/notes なら構造的に1件も入らないためである
+   * （docs/misskey-post-mood-trend.md の原則P1）。リノートは他者の言葉なのでAPI側で除外する。
+   *
+   * sinceIdを渡すとそれより新しいものだけを、maxNotes件を上限にページングして返す。
+   * 上限に達したぶんは取らずに打ち切る（続きは次回、カーソルの続きから取れる）。
+   */
+  async fetchUserNotes(
+    userId: string,
+    options: { sinceId?: string | null; maxNotes?: number; pageSize?: number } = {},
+  ): Promise<UserNote[]> {
+    const maxNotes = options.maxNotes ?? 500;
+    const pageSize = options.pageSize ?? 100;
+    const collected: UserNote[] = [];
+    let cursor = options.sinceId ?? null;
+
+    while (collected.length < maxNotes) {
+      const limit = Math.min(pageSize, maxNotes - collected.length);
+      const page = (await this.api.request("users/notes", {
+        userId,
+        withRenotes: false,
+        withReplies: true,
+        withChannelNotes: false,
+        limit,
+        ...(cursor ? { sinceId: cursor } : {}),
+      })) as unknown as UserNote[];
+      if (page.length === 0) {
+        break;
+      }
+      collected.push(...page);
+
+      // sinceId指定時の並び順（昇順/降順）に依存しないよう、取得できた最大IDを次のカーソルにする。
+      // Misskeyのidは時系列順の文字列なので辞書順比較でよい。
+      const maxId = page.reduce((max, note) => (note.id > max ? note.id : max), cursor ?? "");
+      if (maxId === cursor || page.length < limit) {
+        break;
+      }
+      cursor = maxId;
+    }
+
+    return collected;
   }
 
   private myUserId(): Promise<string> {

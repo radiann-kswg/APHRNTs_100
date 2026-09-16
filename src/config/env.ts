@@ -55,6 +55,30 @@ const envSchema = z.object({
   // 夜の服薬リマインドを送る時刻（その日の夜🌙が服用済みならスキップ）
   MED_REMINDER_HOUR: z.coerce.number().int().min(0).max(23).default(18),
 
+  // Misskeyの本人投稿からの傾向集計（docs/misskey-post-mood-trend.md）。
+  // 機能全体のスイッチ。有効でも BOT_OWNER_USER_ID が空なら動かさず、さらにユーザー本人が
+  // オプトイン（user_preferences.post_analysis_enabled）するまで1件も取得しない。
+  POST_ANALYSIS_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  // 日次バッチの実行時刻（JST）。他のスケジュールタスクと重ならない枠を選ぶこと。
+  POST_ANALYSIS_HOUR: z.coerce.number().int().min(0).max(23).default(5),
+  // 1回の実行で取得する上限。長期停止後は上限まで取り、残りは翌日に回す（カーソル方式なので取りこぼさない）。
+  POST_ANALYSIS_MAX_NOTES_PER_RUN: z.coerce.number().int().positive().default(500),
+  // 集計対象にする可視性（カンマ区切り）。既定は public,home。
+  POST_ANALYSIS_VISIBILITIES: z
+    .string()
+    .default("public,home")
+    .transform((value) =>
+      value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  // 指標の保持日数。超過分は日次バッチの冒頭で削除する。
+  POST_ANALYSIS_METRIC_RETENTION_DAYS: z.coerce.number().int().positive().default(180),
+
   // Claude連携ブリッジ（logs/ ⇄ SQLite）
   CLAUDE_SYNC_ENABLED: z
     .enum(["true", "false"])

@@ -14,6 +14,12 @@ describe("loadEnv", () => {
     expect(env.TREND_NUDGE_HOUR).toBe(21);
     expect(env.MED_REMINDER_HOUR).toBe(18);
     expect(env.BOT_DIGEST_DAYS).toBe(14);
+    // 投稿からの傾向集計は機能スイッチ自体が既定オフ（さらに本人のオプトインが要る）
+    expect(env.POST_ANALYSIS_ENABLED).toBe(false);
+    expect(env.POST_ANALYSIS_HOUR).toBe(5);
+    expect(env.POST_ANALYSIS_MAX_NOTES_PER_RUN).toBe(500);
+    expect(env.POST_ANALYSIS_VISIBILITIES).toEqual(["public", "home"]);
+    expect(env.POST_ANALYSIS_METRIC_RETENTION_DAYS).toBe(180);
     expect(env.GCE_PROJECT).toBe("numbertales-misskey-surver");
     expect(env.GCE_ZONE).toBe("us-central1-a");
     expect(env.GCE_INSTANCE).toBe("misskey-bots-unified");
@@ -38,6 +44,12 @@ describe("loadEnv", () => {
   it("treats an empty DAILY_MORNING_REMINDER_HOUR as disabled", () => {
     const env = loadEnv({ DAILY_MORNING_REMINDER_HOUR: "" });
     expect(env.DAILY_MORNING_REMINDER_HOUR).toBeNull();
+  });
+
+  it("parses POST_ANALYSIS_VISIBILITIES as a trimmed list", () => {
+    const env = loadEnv({ POST_ANALYSIS_ENABLED: "true", POST_ANALYSIS_VISIBILITIES: "public, home ,followers" });
+    expect(env.POST_ANALYSIS_ENABLED).toBe(true);
+    expect(env.POST_ANALYSIS_VISIBILITIES).toEqual(["public", "home", "followers"]);
   });
 
   it("rejects an invalid AI_PROVIDER", () => {

@@ -40,3 +40,15 @@ export function toJstHour(date: Date): number {
 export function toJstDayOfWeek(date: Date): number {
   return toJstShifted(date).getUTCDay();
 }
+
+/** ISO 8601文字列を "YYYY-MM-DD HH:MM"（JST）にする。解釈できない値は null を返す。 */
+export function formatJstDateTime(iso: string): string | null {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  const jst = toJstShifted(date);
+  const hh = String(jst.getUTCHours()).padStart(2, "0");
+  const mm = String(jst.getUTCMinutes()).padStart(2, "0");
+  return `${toJstDateString(date)} ${hh}:${mm}`;
+}
