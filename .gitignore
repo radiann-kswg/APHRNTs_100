@@ -20,3 +20,6 @@ logs/*
 
 # Copilot などが一時的に生成するキャッシュ・出力ファイル置き場（リポジトリ管轄外）
 .[cC]ache/
+
+# git format-patch の出力（リポジトリに残さない）
+*.patch
