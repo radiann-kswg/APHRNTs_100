@@ -44,5 +44,6 @@ describe("buildCrisisListeningFallbackResponse", () => {
     expect(response).not.toContain("もう一度話しかけて");
     expect(response.split("？").length - 1).toBe(1);
     expect(response.length).toBeLessThanOrEqual(300);
+    expect(response).toMatch(/いま、この瞬間/); // 気持ちではなく「今の安全」を訊いているか
   });
 });

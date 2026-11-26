@@ -18,6 +18,7 @@
 | 「今月を振り返りたい」「月次で振り返りたい」 | [monthly-reflection.md](./monthly-reflection.md) |
 | 「生活記録表を書きたい」「受診に持っていくシートを埋めたい」（1日分） | [health-sheet-daily.md](./health-sheet-daily.md) |
 | 「1週間分の健康管理シートを作りたい」「週間の生活記録表を埋めたい」 | [health-sheet-weekly.md](./health-sheet-weekly.md) |
+| 「イライラする」「怒りが収まらない」「八つ当たりしそう」 | [anger-i-row.md](./anger-i-row.md) |
 
 センパイが何をしたいか明言していない場合は、無理に機能を勧めず、まず[AGENTS.mdの運用方針](../AGENTS.md#生活管理cbtサポートの運用方針)通り体調・気分を尋ねる会話から入り、必要そうであれば選択肢として提案してください。
 
@@ -45,6 +46,7 @@
 - [mood-artifact.md](./mood-artifact.md) — 気分推移Artifact（`気分: N/10`を折れ線グラフ化する自己完結型HTMLの生成手順・Claude Desktop / Claude.aiのみ）
 - [health-sheet-daily.md](./health-sheet-daily.md) — 健康管理シート（日間）＋CBT記入テンプレ（生活記録表の各項目＋気分N/10・思考記録・行動活性化・感謝日記。logs/README準拠）
 - [health-sheet-weekly.md](./health-sheet-weekly.md) — 健康管理シート（週間）＋CBT記入テンプレ（月〜日＋服薬・受診日・発作時・メモ＋週間サマリ・週次振り返り）
+- [anger-i-row.md](./anger-i-row.md) — 憤怒を鎮めるイ列／R to X: the Wrath Extinguisher（センパイ考案の怒りの対処カード。和文版：い・き・し・ち・に・ひ・み、英文版：R〜X）
 
 ## 将来の自動化（Misskey Bot）について
 

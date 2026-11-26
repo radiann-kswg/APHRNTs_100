@@ -150,6 +150,7 @@ export function createMessagePipeline(deps: PipelineDeps): MessageHandler {
     //     送信をスキップし、メッセージは処理済み扱いになって再試行もされない（＝返信が永遠に
     //     来ない）。ここで定型文にフォールバックし、無言の正常終了を根絶する。
     //     傾聴優先モードの危機応答では、汎用の「もう一度話しかけてくれ」ではなく傾聴文を使う。
+    replyText = replyText.trim();
     if (replyText.length === 0) {
       deps.logger?.warn(
         `AIProviderが空の応答を返したためフォールバック文を使う（channel=${channel}, listeningMode=${listeningMode}, toolInvocations=${toolInvocationCount}）`,
